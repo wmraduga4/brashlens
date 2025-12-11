@@ -1,0 +1,12 @@
+fastapi[all]
+sqlalchemy[asyncio]
+asyncpg
+alembic
+python-dotenv
+pydantic[email]
+pydantic-settings
+redis[hiredis]
+celery
+python-telegram-bot==20.7
+pillow
+httpx

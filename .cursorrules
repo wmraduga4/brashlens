@@ -1,0 +1,174 @@
+# PhotoHelper Project Rules for Cursor AI
+работай только в виртуальном окружении, не запускай пайтон скрипты без виртуального окружения.
+если виртулаьное окружение нет или не установлены зависимоти - пиши мне в чат, 
+при отладке и запуске этого проекта используй только виртальное окружение а не глобальные настройки скриптов.
+
+
+## Project Context
+You are working on PhotoHelper - a Telegram Mini App for photographer business management.
+Tech stack: FastAPI, PostgreSQL, Redis, Celery, React, TypeScript, Docker.
+
+## Core Principles
+
+### Code Quality
+- Follow industry best practices and modern standards
+- Write clean, maintainable, self-documenting code
+- Use type hints (Python) and TypeScript strict mode
+- Keep functions small and focused (single responsibility)
+- DRY principle - don't repeat yourself
+
+### Architecture
+- RESTful API design patterns
+- Repository pattern for data access
+- Service layer for business logic
+- Dependency injection where applicable
+- Separation of concerns (models, services, API, UI)
+
+### Python/FastAPI Standards
+- Use Pydantic v2 for validation and schemas
+- SQLAlchemy 2.0 async style
+- Follow PEP 8 with Black formatter
+- Type hints everywhere
+- Async/await for IO operations
+- Context managers for resources
+
+### React/TypeScript Standards
+- Functional components with hooks
+- Custom hooks for reusable logic
+- React Query for server state
+- Zustand for client state
+- Proper error boundaries
+- Code splitting and lazy loading
+
+### Database
+- Always use migrations (Alembic)
+- Index foreign keys and frequently queried fields
+- Use transactions for multi-step operations
+- Implement soft deletes where appropriate
+- UTC timestamps everywhere
+
+### Security
+- Never commit secrets/keys
+- Use environment variables
+- Validate all inputs
+- Sanitize user data
+- HTTPS only in production
+- CORS properly configured
+
+### Testing
+- Unit tests for business logic
+- Integration tests for API endpoints
+- Test error cases and edge conditions
+- Mock external dependencies
+
+### Performance
+- Lazy load images
+- Paginate large datasets
+- Use database indexes
+- Cache frequently accessed data (Redis)
+- Optimize queries (avoid N+1)
+- Background tasks for heavy operations (Celery)
+
+### Comments & Documentation
+- Write brief, essential comments only
+- Document complex logic and "why", not "what"
+- Keep commit messages concise and clear
+- Update API docs when endpoints change
+
+### Error Handling
+- Use proper HTTP status codes
+- Provide clear error messages
+- Log errors with context
+- Graceful degradation
+- User-friendly error messages in UI
+
+### Git Workflow
+- Commit after each logical change
+- Clear, concise commit messages
+- Feature branches for new functionality
+- Keep commits atomic and focused
+
+## Specific Rules
+
+### File Structure
+```
+backend/
+  app/
+    models/       # SQLAlchemy models
+    schemas/      # Pydantic schemas
+    services/     # Business logic
+    api/          # FastAPI routes
+    core/         # Config, dependencies
+    utils/        # Helpers
+    tasks/        # Celery tasks
+
+frontend/
+  src/
+    components/   # React components
+    pages/        # Page components
+    hooks/        # Custom hooks
+    services/     # API client
+    store/        # State management
+    utils/        # Helpers
+    types/        # TypeScript types
+```
+
+### Naming Conventions
+- Python: snake_case for functions/variables, PascalCase for classes
+- TypeScript: camelCase for functions/variables, PascalCase for components/types
+- Files: lowercase with hyphens (kebab-case)
+- Constants: UPPER_SNAKE_CASE
+- Database: plural table names (users, bookings)
+
+### API Design
+- Use proper HTTP methods (GET, POST, PATCH, DELETE)
+- Versioned URLs: `/api/v1/...`
+- Plural resource names: `/api/bookings`
+- Use query params for filtering/sorting
+- Consistent response format:
+  ```json
+  {
+    "data": {},
+    "message": "Success",
+    "status": 200
+  }
+  ```
+
+### Docker
+- Multi-stage builds for optimization
+- Non-root users in containers
+- .dockerignore to exclude unnecessary files
+- Health checks for all services
+
+### Environment Variables
+- Never hardcode config
+- Use `.env.example` as template
+- Validate required env vars on startup
+- Different configs for dev/prod
+
+## When Generating Code
+
+1. **Ask clarifying questions** if requirements are unclear
+2. **Suggest better approaches** if you see issues
+3. **Follow existing patterns** in the codebase
+4. **Be concise** - no unnecessary boilerplate
+5. **Think before coding** - plan the approach
+6. **Consider edge cases** and error scenarios
+7. **Optimize for readability** over cleverness
+8. **Write testable code** with clear interfaces
+
+## Response Style
+- Be brief and to the point
+- Code first, explanations second
+- Highlight important decisions
+- Suggest improvements when relevant
+- No excessive pleasantries
+
+## Iteration Workflow
+Each iteration ends with deployment:
+1. Write code following best practices
+2. Add necessary tests
+3. Update migrations if needed
+4. Test locally with Docker Compose
+5. Prepare for deployment
+6. Document changes briefly
