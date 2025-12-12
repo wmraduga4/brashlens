@@ -110,3 +110,7 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Sensitive files
+.cursorrules
+.secret

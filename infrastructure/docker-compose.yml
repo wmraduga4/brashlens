@@ -1,0 +1,58 @@
+# ============================================
+# BrashLens Infrastructure
+# Общие ресурсы: PostgreSQL и Redis
+# ============================================
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: brashlens_postgres
+    env_file:
+      - .env
+    environment:
+      # ВАЖНО: Все значения загружаются из .env файла (env_file выше)
+      # Для разработки: скопируй infrastructure/.env.example в infrastructure/.env и заполни значения из .secret
+      # Для продакшна: создай infrastructure/.env с production значениями (НЕ коммитьте в Git!)
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-brashlens_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - shared-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: brashlens_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - shared-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  shared-network:
+    name: shared-network
+    driver: bridge

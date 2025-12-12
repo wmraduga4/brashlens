@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     REDIS_URL: str
     TELEGRAM_BOT_TOKEN: str
     SECRET_KEY: str
+    WEBHOOK_URL: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

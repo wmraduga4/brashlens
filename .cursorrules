@@ -1,11 +1,27 @@
-# PhotoHelper Project Rules for Cursor AI
+# BrashLens Project Rules for Cursor AI
 работай только в виртуальном окружении, не запускай пайтон скрипты без виртуального окружения.
 если виртулаьное окружение нет или не установлены зависимоти - пиши мне в чат, 
 при отладке и запуске этого проекта используй только виртальное окружение а не глобальные настройки скриптов.
 
+## Секретные данные и конфигурация
+
+**Файл .secret:**
+- Справочник всех чувствительных данных проекта (пароли, токены, API ключи)
+- Расположен в корне проекта: `.secret`
+- НЕ коммитится в Git (добавлен в .gitignore)
+- Используется как справочник для заполнения .env файлов
+- Содержит актуальные учетные данные для БД, API ключи и другие секреты
+- При работе с проектом используй данные из .secret для настройки окружения
+
+**База данных:**
+- Имя БД: `brashlens_db`
+- Пользователь: `govardvolov`
+- Пароль: хранится в `.secret`
+- Инициализация: используй `infrastructure/init_db.sh` для создания/обновления БД и пользователя
+
 
 ## Project Context
-You are working on PhotoHelper - a Telegram Mini App for photographer business management.
+You are working on BrashLens - a Telegram Mini App for photographer business management.
 Tech stack: FastAPI, PostgreSQL, Redis, Celery, React, TypeScript, Docker.
 
 ## Core Principles
@@ -83,10 +99,17 @@ Tech stack: FastAPI, PostgreSQL, Redis, Celery, React, TypeScript, Docker.
 - User-friendly error messages in UI
 
 ### Git Workflow
+- **Работаем в ветке `dev`** - основная ветка разработки
 - Commit after each logical change
-- Clear, concise commit messages
-- Feature branches for new functionality
+- Clear, concise commit messages using conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`)
+- **По окончанию этапа:**
+  1. Коммитим изменения в `dev` с описанием что изменилось
+  2. Пушим `dev` в удаленный репозиторий
+  3. Мержим `dev` в `main`
+  4. Пушим `main` в удаленный репозиторий
+  5. Возвращаемся в ветку `dev`
 - Keep commits atomic and focused
+- **Кратко:** "Запушить dev, смержить в main, вернуться в dev"
 
 ## Specific Rules
 
@@ -134,17 +157,79 @@ frontend/
   }
   ```
 
-### Docker
+### Docker & Infrastructure
+
+**Структура докеризации:**
+Проект использует раздельную структуру с общей инфраструктурой:
+
+```
+BrashLens/
+├── infrastructure/          # Общая инфраструктура (PostgreSQL, Redis)
+│   ├── docker-compose.yml  # Отдельный compose для БД сервисов
+│   └── .env.example
+├── BrashLens/              # Основное приложение
+│   ├── backend/            # FastAPI приложение
+│   ├── frontend/           # React приложение
+│   ├── docker-compose.yml  # Compose для приложения
+│   └── .env.example
+```
+
+**Docker Network:**
+- Все контейнеры в единой сети `shared-network`
+- Инфраструктура создаёт сеть: `docker network create shared-network`
+- Приложения подключаются к существующей сети: `external: true`
+
+**Backend Services:**
+- `backend` (fastapi) - основной API сервер (порт 8000 внутри, 8001 наружу для dev)
+- `chat-bot` - отдельный Telegram бот сервис (python-telegram-bot)
+- `celery-worker` - обработка фоновых задач
+- `celery-beat` - планировщик периодических задач
+
+**Data Layer (общие ресурсы в infrastructure/):**
+- `brashlens_postgres` - основная БД + pgvector (порт 5432)
+- `brashlens_redis` - кеш, очереди Celery, сессии (порт 6379)
+- Запускаются из `infrastructure/docker-compose.yml`
+- Используются всеми приложениями проекта через сеть `shared-network`
+
+**Frontend:**
+- `nginx` - статика Mini App + reverse proxy для API (будет добавлен)
+
+**Volumes:**
+- `postgres_data` - данные PostgreSQL
+- `redis_data` - данные Redis
+- `uploads` - загруженные файлы (будет добавлен)
+- `static` - статические файлы (будет добавлен)
+
+**Health Checks:**
+- Обязательны для всех сервисов
+- PostgreSQL: `pg_isready`
+- Redis: `redis-cli ping`
+- Backend: HTTP GET `/health`
+
+**Порты:**
+- Наружу: только nginx (80, 443) в production
+- Между контейнерами: postgres:5432, redis:6379, fastapi:8000
+- В dev: backend доступен на 8001 для разработки
+
+**Масштабирование:**
+- Celery workers можно множить: `--scale celery-worker=3`
+- FastAPI можно множить через nginx upstream
+- Redis и Postgres - single instance (мастер-реплика позже)
+
+**Docker Best Practices:**
 - Multi-stage builds for optimization
 - Non-root users in containers
 - .dockerignore to exclude unnecessary files
 - Health checks for all services
+- Restart policies: `unless-stopped` для dev, `always` для prod
 
 ### Environment Variables
 - Never hardcode config
 - Use `.env.example` as template
+- Use `.secret` file as reference for sensitive data (passwords, tokens, API keys)
 - Validate required env vars on startup
 - Different configs for dev/prod
+- **ВАЖНО:** Файл `.secret` содержит все чувствительные данные проекта - используй его как справочник
 
 ## When Generating Code
 

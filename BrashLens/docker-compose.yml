@@ -1,0 +1,96 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: brashlens_backend
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      # Переменные POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB берутся из корневого .env (BrashLens/.env)
+      # Используем общие контейнеры brashlens_postgres и brashlens_redis из infrastructure/
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@brashlens_postgres:5432/${POSTGRES_DB:-brashlens_db}
+      - REDIS_URL=redis://brashlens_redis:6379/0
+      - CELERY_BROKER_URL=redis://brashlens_redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://brashlens_redis:6379/0
+    env_file:
+      # Дополнительные переменные (SECRET_KEY и др.) загружаются из backend/.env
+      - ./backend/.env
+    # ВАЖНО: Используем общие контейнеры brashlens_postgres и brashlens_redis из infrastructure/
+    # Убедитесь, что они запущены: cd ../infrastructure && docker compose up -d
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
+    networks:
+      - shared-network
+    restart: unless-stopped
+
+  chat-bot:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.bot
+    container_name: brashlens_chat_bot
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@brashlens_postgres:5432/${POSTGRES_DB:-brashlens_db}
+      - REDIS_URL=redis://brashlens_redis:6379/0
+    env_file:
+      - ./backend/.env
+    networks:
+      - shared-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: brashlens_celery_worker
+    command: celery -A app.core.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@brashlens_postgres:5432/${POSTGRES_DB:-brashlens_db}
+      - REDIS_URL=redis://brashlens_redis:6379/0
+      - CELERY_BROKER_URL=redis://brashlens_redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://brashlens_redis:6379/0
+    env_file:
+      - ./backend/.env
+    networks:
+      - shared-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: brashlens_celery_beat
+    command: celery -A app.core.celery_app beat --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@brashlens_postgres:5432/${POSTGRES_DB:-brashlens_db}
+      - REDIS_URL=redis://brashlens_redis:6379/0
+      - CELERY_BROKER_URL=redis://brashlens_redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://brashlens_redis:6379/0
+    env_file:
+      - ./backend/.env
+    networks:
+      - shared-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+networks:
+  shared-network:
+    external: true
+    name: shared-network

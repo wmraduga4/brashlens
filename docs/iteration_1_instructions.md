@@ -1,5 +1,5 @@
 # ТЗ-ИНСТРУКЦИЯ: ИТЕРАЦИЯ 1 - "Скелет инфраструктуры"
-## PhotoHelper MVP - Для разработчика Mid+ на MacBook M1
+## BrashLens MVP - Для разработчика Mid+ на MacBook M1
 
 **Цель итерации:** Создать рабочий фундамент системы с базовой инфраструктурой, деплоем и простым Telegram ботом.
 
@@ -15,8 +15,11 @@
 
 ```bash
 # Создаём корневую директорию
-mkdir photohelper && cd photohelper
+mkdir brashlens && cd brashlens
 git init
+
+# Создаём начальный коммит и ветку dev
+git checkout -b dev
 
 # Создаём структуру
 mkdir -p backend/app/{models,schemas,services,api,core,utils}
@@ -52,11 +55,46 @@ cursor .
 
 **⚠️ ВАЖНО:** Следуй этим правилам на протяжении всей разработки:
 
-1. **Коммить после каждого завершенного этапа** - не накапливай изменения
-2. **Используй conventional commits** - `feat:`, `fix:`, `docs:`, `refactor:`
-3. **Делай push после каждого коммита** - синхронизируй с удаленным репозиторием
-4. **Создавай feature-ветки** для крупных изменений (опционально для MVP)
+1. **Работаем в ветке `dev`** - основная ветка разработки
+2. **Коммить после каждого завершенного этапа** - не накапливай изменения
+3. **Используй conventional commits** - `feat:`, `fix:`, `docs:`, `refactor:`
+4. **По окончанию этапа:**
+   - Коммитим изменения в `dev` с описанием что изменилось
+   - Пушим `dev` в удаленный репозиторий
+   - Мержим `dev` в `main`
+   - Пушим `main` в удаленный репозиторий
+   - Возвращаемся в ветку `dev`
 5. **Никогда не коммитьте секреты** - `.env`, токены, ключи, пароли
+
+### Workflow по окончанию этапа
+
+```bash
+# 1. Убедись что находишься в ветке dev
+git checkout dev
+
+# 2. Добавь изменения
+git add .
+
+# 3. Закоммить с описанием изменений
+git commit -m "feat: этап X - описание что сделано"
+
+# 4. Запушить dev
+git push origin dev
+
+# 5. Переключись на main
+git checkout main
+
+# 6. Смержи dev в main
+git merge dev
+
+# 7. Запуши main
+git push origin main
+
+# 8. Вернись в dev для дальнейшей работы
+git checkout dev
+```
+
+**Кратко:** "Запушить dev, смержить в main, вернуться в dev"
 
 ### ⚠️ Безопасность
 
@@ -82,64 +120,87 @@ git commit -m "docs: обновление инструкций деплоя"
 ## 🔨 ЭТАП 1: DOCKER COMPOSE + POSTGRESQL + REDIS
 
 ### Задача
-Настроить базовую инфраструктуру в Docker: PostgreSQL, Redis, подготовить контейнеры для FastAPI и Celery.
+Настроить базовую инфраструктуру в Docker: PostgreSQL и Redis в отдельной директории `infrastructure/`, подготовить контейнеры для FastAPI, Celery и Telegram бота.
 
 ### Промт для Cursor
 
 ```
-@Codebase Создай docker-compose.yml для проекта PhotoHelper:
+@Codebase Создай структуру Docker Compose для проекта BrashLens:
 
-Сервисы:
-1. postgres: PostgreSQL 16 Alpine
-   - Порт: 5432
-   - База: photohelper_db
-   - Пользователь и пароль из .env
-   - Volume для персистентности данных
-   - Healthcheck
+1. infrastructure/docker-compose.yml:
+   Сервисы:
+   - postgres: PostgreSQL 16 с pgvector
+     * Имя контейнера: brashlens_postgres
+     * Порт: 5432
+     * База: brashlens_db
+     * Пользователь и пароль из .env
+     * Volume: postgres_data
+     * Healthcheck: pg_isready
+     * Network: shared-network (создаёт сеть)
+   
+   - redis: Redis 7 Alpine
+     * Имя контейнера: brashlens_redis
+     * Порт: 6379
+     * Volume: redis_data
+     * Healthcheck: redis-cli ping
+     * Network: shared-network
 
-2. redis: Redis 7 Alpine
-   - Порт: 6379
-   - Volume для персистентности
-   - Healthcheck
+2. BrashLens/docker-compose.yml:
+   Сервисы (пока без Dockerfile, добавим позже):
+   - backend: FastAPI приложение
+     * Порт: 8001:8000
+     * Volume для hot reload
+     * Environment из .env
+     * Network: shared-network (external: true)
+     * Подключение к brashlens_postgres:5432 и brashlens_redis:6379
+   
+   - chat-bot: Telegram бот (отдельный сервис)
+     * Environment из .env
+     * Network: shared-network (external: true)
+   
+   - celery-worker: Celery worker
+     * Environment из .env
+     * Network: shared-network (external: true)
+   
+   - celery-beat: Celery beat scheduler
+     * Environment из .env
+     * Network: shared-network (external: true)
 
-3. backend: FastAPI приложение (пока без Dockerfile, добавим позже)
-   - Зависимости: postgres, redis
-   - Порт: 8000
-   - Volume для hot reload
-   - Environment из .env
-
-4. celery_worker: Celery worker (пока без Dockerfile, добавим позже)
-   - Зависимости: postgres, redis, backend
-   - Environment из .env
-
-Используй networks для связи сервисов.
-Добавь restart: unless-stopped для всех сервисов.
+Используй restart: unless-stopped для всех сервисов.
+Создай network shared-network в infrastructure, используй external в приложении.
 
 Также создай:
-- backend/.env.example с необходимыми переменными
+- infrastructure/.env.example с переменными для postgres и redis
+- BrashLens/backend/.env.example с необходимыми переменными
 - .gitignore с типичными исключениями для Python/Node.js/Docker
 ```
 
 ### Реализация
 
 1. **Создай файлы через Cursor** (используй промт выше)
-2. **Скопируй .env.example → .env** и заполни реальные значения
+2. **Скопируй .env.example → .env** в обеих директориях и заполни реальные значения
 3. **Проверь структуру файлов**
 
 ### ТРОЙНОЕ ТЕСТИРОВАНИЕ #1
 
 #### ✅ Тест 1: Проверка конфигурации Docker Compose
 ```bash
-# Валидация docker-compose.yml
+# Валидация infrastructure/docker-compose.yml
+cd infrastructure
+docker compose config
+
+# Валидация BrashLens/docker-compose.yml
+cd ../BrashLens
 docker compose config
 
 # Ожидаемый результат: YAML валиден, нет ошибок
 ```
 
-#### ✅ Тест 2: Запуск только БД сервисов
+#### ✅ Тест 2: Запуск инфраструктуры
 ```bash
-# Запускаем только postgres и redis
-docker compose up -d postgres redis
+# Запускаем инфраструктуру (postgres и redis)
+cd infrastructure
+docker compose up -d
 
 # Проверяем статус
 docker compose ps
@@ -148,13 +209,16 @@ docker compose ps
 docker compose logs postgres
 docker compose logs redis
 
-# Ожидаемый результат: оба сервиса healthy
+# Проверяем сеть
+docker network ls | grep shared-network
+
+# Ожидаемый результат: оба сервиса healthy, сеть создана
 ```
 
 #### ✅ Тест 3: Подключение к БД и Redis
 ```bash
 # Подключение к PostgreSQL
-docker compose exec postgres psql -U photohelper_user -d photohelper_db -c "SELECT version();"
+docker compose exec postgres psql -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-brashlens_db} -c "SELECT version();"
 
 # Подключение к Redis
 docker compose exec redis redis-cli ping
@@ -165,8 +229,9 @@ docker compose exec redis redis-cli ping
 ```
 
 **Критерии прохождения:**
-- ✅ docker compose config без ошибок (docker-compose.yml валиден)
-- ✅ Контейнеры postgres и redis запущены и healthy
+- ✅ docker compose config без ошибок в обеих директориях
+- ✅ Контейнеры brashlens_postgres и brashlens_redis запущены и healthy
+- ✅ Сеть shared-network создана
 - ✅ Успешное подключение к обеим БД
 
 **Если тесты не прошли:** исправь ошибки, повтори все 3 теста заново.
@@ -174,9 +239,21 @@ docker compose exec redis redis-cli ping
 ### Коммит изменений
 
 ```bash
+# Убедись что в ветке dev
+git checkout dev
+
+# Добавь изменения
 git add .
+
+# Закоммить
 git commit -m "feat: этап 1 - Docker Compose инфраструктура с PostgreSQL и Redis"
+
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
 git push origin main
+git checkout dev
 ```
 
 ---
@@ -189,13 +266,13 @@ git push origin main
 ### Промт для Cursor
 
 ```
-@backend/app Создай структуру FastAPI приложения для PhotoHelper:
+@backend/app Создай структуру FastAPI приложения для BrashLens:
 
 1. backend/app/main.py:
-   - FastAPI приложение с title="PhotoHelper API"
+   - FastAPI приложение с title="BrashLens API"
    - Подключение CORS middleware (разрешить все origins для разработки)
    - Роут GET /health -> {"status": "ok", "timestamp": "..."}
-   - Роут GET / -> {"message": "PhotoHelper API v1.0"}
+   - Роут GET / -> {"message": "BrashLens API v1.0"}
 
 2. backend/app/core/config.py:
    - Класс Settings на основе pydantic BaseSettings
@@ -243,6 +320,7 @@ git push origin main
 3. **Пересобери контейнеры**
 
 ```bash
+cd BrashLens
 docker compose build backend
 docker compose up -d backend
 ```
@@ -259,7 +337,7 @@ curl http://localhost:8000/health
 # Проверка корневого endpoint
 curl http://localhost:8000/
 
-# Ожидаемый результат: {"message":"PhotoHelper API v1.0"}
+# Ожидаемый результат: {"message":"BrashLens API v1.0"}
 ```
 
 #### ✅ Тест 2: Проверка документации
@@ -280,7 +358,8 @@ docker compose logs backend
 # Можно добавить временный endpoint для проверки коннекта
 
 # Проверка через psql что база создана
-docker compose exec postgres psql -U photohelper_user -d photohelper_db -c "\dt"
+cd ../infrastructure
+docker compose exec postgres psql -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-brashlens_db} -c "\dt"
 ```
 
 **Критерии прохождения:**
@@ -293,9 +372,21 @@ docker compose exec postgres psql -U photohelper_user -d photohelper_db -c "\dt"
 ### Коммит изменений
 
 ```bash
+# Убедись что в ветке dev
+git checkout dev
+
+# Добавь изменения
 git add .
+
+# Закоммить
 git commit -m "feat: этап 2 - FastAPI базовое приложение с health check и документацией"
+
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
 git push origin main
+git checkout dev
 ```
 
 ---
@@ -310,15 +401,14 @@ git push origin main
 **Перед применением миграций в production:**
 ```bash
 # Создай backup базы данных
-docker compose exec postgres pg_dump -U photohelper_user photohelper_db > backup_$(date +%Y%m%d_%H%M%S).sql
-
-# Или для production:
-docker compose -f docker-compose.prod.yml exec postgres pg_dump -U photohelper_user photohelper_db > backup_$(date +%Y%m%d_%H%M%S).sql
+cd infrastructure
+docker compose exec postgres pg_dump -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-brashlens_db} > backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
 **Восстановление из backup:**
 ```bash
-docker compose exec -T postgres psql -U photohelper_user photohelper_db < backup_YYYYMMDD_HHMMSS.sql
+cd infrastructure
+docker compose exec -T postgres psql -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-brashlens_db} < backup_YYYYMMDD_HHMMSS.sql
 ```
 
 ### Промт для Cursor
@@ -393,12 +483,12 @@ cat backend/alembic/versions/*_initial_test_table.py
 #### ✅ Тест 2: Проверка применения миграции
 ```bash
 # Проверь таблицы в БД
-docker compose exec postgres psql -U photohelper_user -d photohelper_db -c "\dt"
+docker compose exec postgres psql -U brashlens_user -d brashlens_db -c "\dt"
 
 # Ожидаемый результат: таблицы test_connections и alembic_version
 
 # Проверь структуру таблицы
-docker compose exec postgres psql -U photohelper_user -d photohelper_db -c "\d test_connections"
+docker compose exec postgres psql -U brashlens_user -d brashlens_db -c "\d test_connections"
 
 # Ожидаемый результат: колонки id, message, created_at
 ```
@@ -414,7 +504,7 @@ curl -X POST http://localhost:8000/test-db \
   -d '{"message":"Test connection works!"}'
 
 # Проверь что запись создалась
-docker compose exec postgres psql -U photohelper_user -d photohelper_db \
+docker compose exec postgres psql -U brashlens_user -d brashlens_db \
   -c "SELECT * FROM test_connections;"
 
 # Ожидаемый результат: одна запись с сообщением
@@ -430,9 +520,21 @@ docker compose exec postgres psql -U photohelper_user -d photohelper_db \
 ### Коммит изменений
 
 ```bash
+# Убедись что в ветке dev
+git checkout dev
+
+# Добавь изменения
 git add .
+
+# Закоммить
 git commit -m "feat: этап 3 - PostgreSQL подключение, Alembic миграции и тестовая таблица"
+
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
 git push origin main
+git checkout dev
 ```
 
 ---
@@ -445,7 +547,7 @@ git push origin main
 ### Промт для Cursor
 
 ```
-@backend/app/core Создай Redis сервис для PhotoHelper:
+@backend/app/core Создай Redis сервис для BrashLens:
 
 1. backend/app/core/redis.py:
    - Async Redis client
@@ -483,6 +585,7 @@ git push origin main
 2. **Перезапусти backend:**
 
 ```bash
+cd BrashLens
 docker compose restart backend
 ```
 
@@ -506,6 +609,7 @@ curl -X POST http://localhost:8000/cache \
 # Ожидаемый результат: {"status":"saved"}
 
 # Проверь через Redis CLI
+cd ../infrastructure
 docker compose exec redis redis-cli GET test_key
 
 # Ожидаемый результат: "Hello Redis!"
@@ -534,9 +638,21 @@ curl http://localhost:8000/cache/nonexistent
 ### Коммит изменений
 
 ```bash
+# Убедись что в ветке dev
+git checkout dev
+
+# Добавь изменения
 git add .
+
+# Закоммить
 git commit -m "feat: этап 4 - Redis подключение и cache service"
+
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
 git push origin main
+git checkout dev
 ```
 
 ---
@@ -549,7 +665,7 @@ git push origin main
 ### Промт для Cursor
 
 ```
-@backend/app/core @backend/app/services Настрой Celery для PhotoHelper:
+@backend/app/core @backend/app/services Настрой Celery для BrashLens:
 
 1. backend/app/core/celery_app.py:
    - Создание Celery app
@@ -598,6 +714,7 @@ git push origin main
 3. **Пересобери и перезапусти:**
 
 ```bash
+cd BrashLens
 docker compose down
 docker compose build
 docker compose up -d
@@ -608,7 +725,8 @@ docker compose up -d
 #### ✅ Тест 1: Проверка запуска Celery Worker
 ```bash
 # Проверь логи worker
-docker compose logs celery_worker
+cd BrashLens
+docker compose logs celery-worker
 
 # Ожидаемый результат:
 # - Celery worker запущен
@@ -616,7 +734,7 @@ docker compose logs celery_worker
 # - Задачи зарегистрированы (test_task, add_numbers)
 
 # Проверь статус
-docker compose ps celery_worker
+docker compose ps celery-worker
 
 # Ожидаемый результат: Up
 ```
@@ -646,7 +764,8 @@ curl http://localhost:8000/task-status/{task_id}
 #### ✅ Тест 3: Проверка логов задачи
 ```bash
 # Смотри логи worker во время выполнения задачи
-docker compose logs -f celery_worker
+cd BrashLens
+docker compose logs -f celery-worker
 
 # Ожидаемый результат в логах:
 # - Получена задача test_task
@@ -664,9 +783,21 @@ docker compose logs -f celery_worker
 ### Коммит изменений
 
 ```bash
+# Убедись что в ветке dev
+git checkout dev
+
+# Добавь изменения
 git add .
+
+# Закоммить
 git commit -m "feat: этап 5 - Celery worker с тестовыми задачами"
+
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
 git push origin main
+git checkout dev
 ```
 
 ---
@@ -674,33 +805,34 @@ git push origin main
 ## 🔨 ЭТАП 6: TELEGRAM БОТ - БАЗОВАЯ НАСТРОЙКА
 
 ### Задача
-Зарегистрировать бота через BotFather, настроить webhook, создать обработчик команды `/start`.
+Зарегистрировать бота через BotFather, создать отдельный сервис для чат-бота в Docker, настроить обработчик команды `/start`.
 
 ### Предварительные действия
 
 1. **Регистрация бота:**
    - Открой Telegram, найди @BotFather
    - Отправь `/newbot`
-   - Укажи имя: `PhotoHelper Bot`
-   - Укажи username: `photohelper_yourname_bot`
+   - Укажи имя: `BrashLens Bot`
+   - Укажи username: `brashlens_yourname_bot`
    - Скопируй токен: `1234567890:ABCdefGHIjklMNOpqrsTUVwxyz`
 
 2. **Добавь токен в .env:**
 ```bash
+# В BrashLens/backend/.env
 TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
-WEBHOOK_URL=https://yourdomain.com/webhook
+WEBHOOK_URL=https://yourdomain.com/webhook  # Опционально для production
 ```
 
 ### Промт для Cursor
 
 ```
-@backend/app Создай Telegram бота для PhotoHelper:
+@backend/app Создай Telegram бота для BrashLens как отдельный сервис:
 
 1. backend/app/bot/__init__.py - пустой файл
 
 2. backend/app/bot/handlers.py:
    - Обработчик команды /start:
-     * Отправляет "👋 Привет! Я PhotoHelper бот."
+     * Отправляет "👋 Привет! Я BrashLens бот."
      * Добавляет кнопки Inline:
        - "📸 Я фотограф"
        - "👤 Я клиент"
@@ -710,23 +842,38 @@ WEBHOOK_URL=https://yourdomain.com/webhook
    - Регистрация handlers
    - Функция setup_webhook(webhook_url: str)
    - Функция start_polling() для локальной разработки
+   - Функция main() для запуска бота
 
-4. backend/app/api/v1/webhook.py:
+4. backend/app/bot/main.py:
+   - Точка входа для запуска бота как отдельного процесса
+   - Загружает конфигурацию
+   - Запускает polling или webhook в зависимости от настроек
+
+5. backend/app/api/v1/webhook.py (для webhook режима):
    - Router для webhook
    - POST /webhook:
      * Принимает Update от Telegram
      * Обрабатывает через бота
      * Возвращает 200 OK
 
-5. Обнови backend/app/main.py:
-   - Include webhook router
-   - При startup:
-     * Если WEBHOOK_URL установлен -> setup_webhook()
-     * Иначе -> start_polling() в background
-
-6. backend/app/core/config.py:
+6. Обнови backend/app/core/config.py:
    - Добавь TELEGRAM_BOT_TOKEN: str
    - Добавь WEBHOOK_URL: str | None = None
+
+7. Создай backend/Dockerfile.bot для чат-бота:
+   - Базовый образ python:3.11-slim
+   - Копирует код бота
+   - CMD запускает bot/main.py
+
+8. Обнови BrashLens/docker-compose.yml:
+   - Добавь сервис chat-bot:
+     * build: context: ./backend, dockerfile: Dockerfile.bot
+     * container_name: brashlens_chat_bot
+     * environment: TELEGRAM_BOT_TOKEN, WEBHOOK_URL
+     * env_file: ./backend/.env
+     * networks: shared-network
+     * restart: unless-stopped
+     * depends_on: backend (для webhook режима)
 
 Используй python-telegram-bot 20.7, async/await, type hints.
 ```
@@ -735,22 +882,25 @@ WEBHOOK_URL=https://yourdomain.com/webhook
 
 1. **Генерируй код через Cursor**
 2. **Для локальной разработки используй polling** (закомментируй WEBHOOK_URL в .env)
-3. **Перезапусти backend:**
+3. **Запусти чат-бот:**
 
 ```bash
-docker compose restart backend
+cd BrashLens
+docker compose up -d chat-bot
 ```
 
 ### ТРОЙНОЕ ТЕСТИРОВАНИЕ #6
 
 #### ✅ Тест 1: Проверка запуска бота
 ```bash
-# Проверь логи backend
-docker compose logs backend | grep -i telegram
+# Проверь логи chat-bot
+cd BrashLens
+docker compose logs chat-bot | grep -i telegram
 
 # Ожидаемый результат:
 # - "Bot started in polling mode" или "Webhook set to ..."
 # - Нет ошибок авторизации
+# - Контейнер chat-bot запущен и работает
 ```
 
 #### ✅ Тест 2: Отправка /start в Telegram
@@ -759,11 +909,11 @@ docker compose logs backend | grep -i telegram
 1. Открой чат с ботом
 2. Отправь /start
 3. Ожидаемый результат:
-   - Бот отвечает "👋 Привет! Я PhotoHelper бот."
+   - Бот отвечает "👋 Привет! Я BrashLens бот."
    - Видны кнопки "📸 Я фотограф" и "👤 Я клиент"
 
 # Проверь логи обработки команды
-docker compose logs backend | tail -20
+docker compose logs chat-bot | tail -20
 ```
 
 #### ✅ Тест 3: Проверка callback кнопок
@@ -788,9 +938,21 @@ docker compose logs backend | grep -i callback
 ### Коммит изменений
 
 ```bash
+# Убедись что в ветке dev
+git checkout dev
+
+# Добавь изменения
 git add .
+
+# Закоммить
 git commit -m "feat: этап 6 - Telegram бот с базовой настройкой и командой /start"
+
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
 git push origin main
+git checkout dev
 ```
 
 ---
@@ -803,13 +965,13 @@ git push origin main
 ### Предварительные требования
 
 - VPS с Ubuntu 22.04+
-- Доменное имя (photohelper.example.com)
+- Доменное имя (brashlens.example.com)
 - SSH доступ
 
 ### Промт для Cursor
 
 ```
-@docs Создай документацию по деплою PhotoHelper:
+@docs Создай документацию по деплою BrashLens:
 
 1. docs/deployment.md:
    
@@ -835,12 +997,13 @@ git push origin main
    - Auto-renewal настройка
    
    Секция "Systemd Service":
-   - Создание photohelper.service
+   - Создание brashlens.service
    - Автозапуск при перезагрузке
    
    Секция "CI/CD":
    - Базовый deploy.sh скрипт:
-     * git pull
+     * git checkout main (на сервере работаем с main)
+     * git pull origin main
      * docker compose build
      * docker compose up -d
      * docker compose exec backend alembic upgrade head
@@ -852,7 +1015,7 @@ git push origin main
      * Healthchecks
      * Логирование в файлы
 
-3. nginx/photohelper.conf:
+3. nginx/brashlens.conf:
    - Конфигурация Nginx
    - Proxy pass для backend
    - Static файлы для frontend
@@ -872,11 +1035,14 @@ git push origin main
 
 ```bash
 # На VPS
-ssh deploy@photohelper.example.com
+ssh deploy@brashlens.example.com
 
 # Клонируй репозиторий
-git clone https://github.com/yourusername/photohelper.git
-cd photohelper
+git clone https://github.com/yourusername/brashlens.git
+cd brashlens
+
+# Для разработки переключись на dev ветку
+git checkout dev
 
 # Настрой .env
 cp backend/.env.example backend/.env
@@ -900,8 +1066,8 @@ sudo apt update
 sudo apt install nginx
 
 # Скопируй конфигурацию
-sudo cp nginx/photohelper.conf /etc/nginx/sites-available/
-sudo ln -s /etc/nginx/sites-available/photohelper.conf /etc/nginx/sites-enabled/
+sudo cp nginx/brashlens.conf /etc/nginx/sites-available/
+sudo ln -s /etc/nginx/sites-available/brashlens.conf /etc/nginx/sites-enabled/
 
 # Проверь конфигурацию
 sudo nginx -t
@@ -917,7 +1083,7 @@ sudo systemctl restart nginx
 sudo apt install certbot python3-certbot-nginx
 
 # Получи сертификат
-sudo certbot --nginx -d photohelper.example.com
+sudo certbot --nginx -d brashlens.example.com
 
 # Auto-renewal уже настроен через systemd timer
 ```
@@ -926,7 +1092,7 @@ sudo certbot --nginx -d photohelper.example.com
 
 ```bash
 # Обнови .env на сервере
-WEBHOOK_URL=https://photohelper.example.com/webhook
+WEBHOOK_URL=https://brashlens.example.com/webhook
 
 # Перезапусти backend
 docker compose -f docker-compose.prod.yml restart backend
@@ -942,7 +1108,7 @@ docker compose -f docker-compose.prod.yml ps
 # Ожидаемый результат: все контейнеры Up и Healthy
 
 # Проверь доступность API
-curl https://photohelper.example.com/health
+curl https://brashlens.example.com/health
 
 # Ожидаемый результат: {"status":"ok",...}
 ```
@@ -950,17 +1116,17 @@ curl https://photohelper.example.com/health
 #### ✅ Тест 2: Проверка Nginx и SSL
 ```bash
 # Проверь SSL сертификат
-curl -I https://photohelper.example.com
+curl -I https://brashlens.example.com
 
 # Ожидаемый результат: HTTP/2 200, сертификат валиден
 
 # Проверь редирект с HTTP на HTTPS
-curl -I http://photohelper.example.com
+curl -I http://brashlens.example.com
 
 # Ожидаемый результат: 301 или 302 редирект на HTTPS
 
 # Проверь документацию API
-open https://photohelper.example.com/docs
+open https://brashlens.example.com/docs
 ```
 
 #### ✅ Тест 3: Проверка webhook бота
@@ -974,7 +1140,7 @@ docker compose -f docker-compose.prod.yml logs backend | grep webhook
 # Ожидаемый результат: POST /webhook 200 OK
 
 # Проверь что webhook установлен
-# В логах должно быть: "Webhook set to https://photohelper.example.com/webhook"
+# В логах должно быть: "Webhook set to https://brashlens.example.com/webhook"
 ```
 
 **Критерии прохождения:**
@@ -989,9 +1155,21 @@ docker compose -f docker-compose.prod.yml logs backend | grep webhook
 ### Коммит изменений
 
 ```bash
+# Убедись что в ветке dev
+git checkout dev
+
+# Добавь изменения
 git add .
+
+# Закоммить
 git commit -m "feat: этап 7 - Деплой на VPS с Nginx, SSL и webhook"
+
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
 git push origin main
+git checkout dev
 ```
 
 ---
@@ -1007,21 +1185,21 @@ git push origin main
 
 ```bash
 # На VPS
-sudo nano /etc/systemd/system/photohelper.service
+sudo nano /etc/systemd/system/brashlens.service
 ```
 
 Содержимое файла:
 
 ```ini
 [Unit]
-Description=PhotoHelper Application
+Description=BrashLens Application
 Requires=docker.service
 After=docker.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/home/deploy/photohelper
+WorkingDirectory=/home/deploy/brashlens
 ExecStart=/usr/local/bin/docker compose -f docker-compose.prod.yml up -d
 ExecStop=/usr/local/bin/docker compose -f docker-compose.prod.yml down
 User=deploy
@@ -1035,8 +1213,8 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable photohelper.service
-sudo systemctl start photohelper.service
+sudo systemctl enable brashlens.service
+sudo systemctl start brashlens.service
 ```
 
 ### ТРОЙНОЕ ТЕСТИРОВАНИЕ #8
@@ -1044,7 +1222,7 @@ sudo systemctl start photohelper.service
 #### ✅ Тест 1: Проверка статуса systemd service
 ```bash
 # Проверь статус сервиса
-sudo systemctl status photohelper.service
+sudo systemctl status brashlens.service
 
 # Ожидаемый результат:
 # - Active: active (running)
@@ -1057,7 +1235,7 @@ sudo systemctl status photohelper.service
 sudo reboot
 
 # Подожди 2-3 минуты, затем подключись снова
-ssh deploy@photohelper.example.com
+ssh deploy@brashlens.example.com
 
 # Проверь что все контейнеры запустились автоматически
 docker ps
@@ -1065,13 +1243,13 @@ docker ps
 # Ожидаемый результат: все контейнеры Running
 
 # Проверь доступность API
-curl https://photohelper.example.com/health
+curl https://brashlens.example.com/health
 ```
 
 #### ✅ Тест 3: Проверка логов автозапуска
 ```bash
 # Проверь логи systemd
-sudo journalctl -u photohelper.service -n 50
+sudo journalctl -u brashlens.service -n 50
 
 # Ожидаемый результат: успешный запуск без ошибок
 
@@ -1089,9 +1267,21 @@ sudo journalctl -u photohelper.service -n 50
 ### Коммит изменений
 
 ```bash
+# Убедись что в ветке dev
+git checkout dev
+
+# Добавь изменения
 git add .
+
+# Закоммить
 git commit -m "feat: этап 8 - Systemd service для автозапуска приложения"
+
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
 git push origin main
+git checkout dev
 ```
 
 ---
@@ -1159,13 +1349,19 @@ bash -n scripts/deploy.sh
 #### ✅ Тест 2: Тестовый деплой на VPS
 ```bash
 # На VPS
-cd /home/deploy/photohelper
+cd /home/deploy/brashlens
 
 # Сделай небольшое изменение (например, в README)
 echo "# Test deploy" >> README.md
 git add README.md
 git commit -m "Test deploy script"
-git push
+
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
+git push origin main
+git checkout dev
 
 # Запусти deploy скрипт
 ./scripts/deploy.sh
@@ -1183,6 +1379,14 @@ git push
 echo "# Another change" >> README.md
 git add README.md
 git commit -m "Test rollback"
+
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
+git push origin main
+git checkout dev
+
 ./scripts/deploy.sh
 
 # Откатись назад
@@ -1194,7 +1398,7 @@ cat README.md
 # Ожидаемый результат: последняя строка не должна быть видна
 
 # Проверь что приложение работает
-curl https://photohelper.example.com/health
+curl https://brashlens.example.com/health
 ```
 
 **Критерии прохождения:**
@@ -1207,9 +1411,21 @@ curl https://photohelper.example.com/health
 ### Коммит изменений
 
 ```bash
+# Убедись что в ветке dev
+git checkout dev
+
+# Добавь изменения
 git add .
+
+# Закоммить
 git commit -m "feat: этап 9 - CI/CD скрипты деплоя и rollback"
+
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
 git push origin main
+git checkout dev
 ```
 
 ---
@@ -1221,10 +1437,12 @@ git push origin main
 Пройдись по всем критериям:
 
 - [ ] **Docker Compose:**
-  - [ ] PostgreSQL работает и доступен
-  - [ ] Redis работает и доступен
+  - [ ] PostgreSQL работает и доступен (infrastructure/)
+  - [ ] Redis работает и доступен (infrastructure/)
   - [ ] Backend запускается без ошибок
+  - [ ] Chat-bot запущен и работает
   - [ ] Celery worker обрабатывает задачи
+  - [ ] Celery beat запущен (если настроен)
 
 - [ ] **FastAPI:**
   - [ ] Эндпоинты /health и / работают
@@ -1264,17 +1482,18 @@ git push origin main
 docker compose ps
 
 # 2. Проверь API
-curl https://photohelper.example.com/health
-curl https://photohelper.example.com/docs
+curl https://brashlens.example.com/health
+curl https://brashlens.example.com/docs
 
 # 3. Проверь БД
-docker compose exec postgres psql -U photohelper_user -d photohelper_db -c "SELECT COUNT(*) FROM test_connections;"
+cd infrastructure
+docker compose exec postgres psql -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-brashlens_db} -c "SELECT COUNT(*) FROM test_connections;"
 
 # 4. Проверь Redis
 docker compose exec redis redis-cli PING
 
 # 5. Запусти тестовую Celery задачу
-curl -X POST https://photohelper.example.com/test-celery \
+curl -X POST https://brashlens.example.com/test-celery \
   -H "Content-Type: application/json" \
   -d '{"message":"Final test"}'
 
@@ -1300,7 +1519,13 @@ curl -X POST https://photohelper.example.com/test-celery \
 ### Финальный коммит
 
 ```bash
+# Убедись что в ветке dev
+git checkout dev
+
+# Добавь изменения
 git add .
+
+# Закоммить
 git commit -m "feat: iteration 1 - infrastructure skeleton
 
 - Setup Docker Compose with PostgreSQL, Redis, FastAPI, Celery
@@ -1316,7 +1541,12 @@ git commit -m "feat: iteration 1 - infrastructure skeleton
 
 All services tested and working in production."
 
+# Запушить dev, смержить в main, вернуться в dev
+git push origin dev
+git checkout main
+git merge dev
 git push origin main
+git checkout dev
 ```
 
 ### Документация
@@ -1339,7 +1569,7 @@ git push origin main
 - ✅ CI/CD скрипты
 
 ## Технические метрики
-- Контейнеров: 4 (postgres, redis, backend, celery_worker)
+- Контейнеров: 6 (brashlens_postgres, brashlens_redis, backend, chat-bot, celery-worker, celery-beat)
 - API endpoints: 8
 - Моделей БД: 1 (test_connections)
 - Celery задач: 2
@@ -1377,7 +1607,8 @@ git push origin main
 
 ### Docker
 ```bash
-# Пересобрать все контейнеры
+# Пересобрать все контейнеры приложения
+cd BrashLens
 docker compose build --no-cache
 
 # Перезапустить конкретный сервис
@@ -1389,13 +1620,18 @@ docker compose logs -f backend
 # Зайти в контейнер
 docker compose exec backend bash
 
-# Остановить всё и удалить volumes
+# Остановить приложение (не удаляет инфраструктуру)
+docker compose down
+
+# Остановить инфраструктуру (осторожно - удалит данные если не сохранены)
+cd ../infrastructure
 docker compose down -v
 ```
 
 ### База данных
 ```bash
 # Создать миграцию
+cd BrashLens
 docker compose exec backend alembic revision --autogenerate -m "Description"
 
 # Применить миграции
@@ -1411,9 +1647,11 @@ docker compose exec backend alembic history
 ### Celery
 ```bash
 # Посмотреть активные задачи
-docker compose exec celery_worker celery -A app.core.celery_app inspect active
+cd BrashLens
+docker compose exec celery-worker celery -A app.core.celery_app inspect active
 
 # Очистить очередь
+cd ../infrastructure
 docker compose exec redis redis-cli FLUSHALL
 ```
 
