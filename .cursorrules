@@ -66,10 +66,12 @@ Tech stack: FastAPI, PostgreSQL, Redis, Celery, React, TypeScript, Docker.
 ### Security
 - Never commit secrets/keys
 - Use environment variables
-- Validate all inputs
+- Validate all inputs (Pydantic schemas)
 - Sanitize user data
 - HTTPS only in production
-- CORS properly configured
+- **CORS properly configured** - настраивается через `ALLOWED_ORIGINS` в config
+- **Rate limiting** для защиты от злоупотреблений (slowapi)
+- Global exception handlers для безопасной обработки ошибок
 
 ### Testing
 - Unit tests for business logic
@@ -94,6 +96,8 @@ Tech stack: FastAPI, PostgreSQL, Redis, Celery, React, TypeScript, Docker.
 ### Error Handling
 - Use proper HTTP status codes
 - Provide clear error messages
+- **Global exception handlers** в `app/core/exceptions.py`
+- **Centralized logging** через `app/core/logging.py`
 - Log errors with context
 - Graceful degradation
 - User-friendly error messages in UI
@@ -118,12 +122,17 @@ Tech stack: FastAPI, PostgreSQL, Redis, Celery, React, TypeScript, Docker.
 backend/
   app/
     models/       # SQLAlchemy models
-    schemas/      # Pydantic schemas
+    schemas/      # Pydantic schemas (requests.py, responses.py)
     services/     # Business logic
     api/          # FastAPI routes
-    core/         # Config, dependencies
+      v1/         # API version 1 routes
+        health.py # Health check endpoints
+        test.py   # Test endpoints
+        cache.py  # Redis cache endpoints
+        tasks.py  # Celery tasks endpoints
+    core/         # Config, dependencies, logging, exceptions, limiter
     utils/        # Helpers
-    tasks/        # Celery tasks
+    bot/          # Telegram bot handlers
 
 frontend/
   src/
@@ -145,17 +154,17 @@ frontend/
 
 ### API Design
 - Use proper HTTP methods (GET, POST, PATCH, DELETE)
-- Versioned URLs: `/api/v1/...`
-- Plural resource names: `/api/bookings`
+- **Versioned URLs: `/api/v1/...`** - все endpoints должны быть под версией
+- API routes разделены по функциональности в `app/api/v1/`:
+  - `health.py` - health checks
+  - `test.py` - тестовые endpoints
+  - `cache.py` - Redis cache endpoints
+  - `tasks.py` - Celery tasks endpoints
+- Use Pydantic schemas for request/response validation (`app/schemas/`)
 - Use query params for filtering/sorting
-- Consistent response format:
-  ```json
-  {
-    "data": {},
-    "message": "Success",
-    "status": 200
-  }
-  ```
+- Consistent response format with typed schemas
+- **Rate limiting** включен по умолчанию (60 req/min, настраивается через `RATE_LIMIT_PER_MINUTE`)
+- **CORS** настраивается через `ALLOWED_ORIGINS` в config (по умолчанию `["*"]` для dev)
 
 ### Docker & Infrastructure
 

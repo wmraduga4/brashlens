@@ -1,7 +1,10 @@
 """Telegram bot setup and configuration."""
+import logging
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 from app.bot.handlers import start_command, handle_callback
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def create_application() -> Application:
@@ -21,7 +24,7 @@ async def setup_webhook(webhook_url: str) -> None:
     await application.initialize()
     await application.bot.set_webhook(webhook_url)
     await application.start()
-    print(f"Webhook set to: {webhook_url}")
+    logger.info(f"Webhook set to: {webhook_url}")
     # Keep running
     await application.updater.start_webhook(
         listen="0.0.0.0",
@@ -35,7 +38,7 @@ async def start_polling() -> None:
     application = create_application()
     await application.initialize()
     await application.start()
-    print("Bot started in polling mode")
+    logger.info("Bot started in polling mode")
     
     # Start polling
     await application.updater.start_polling()
@@ -45,5 +48,6 @@ async def start_polling() -> None:
         import asyncio
         await asyncio.Event().wait()
     except KeyboardInterrupt:
+        logger.info("Bot stopping...")
         await application.stop()
         await application.shutdown()

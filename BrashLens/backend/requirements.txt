@@ -1,12 +1,27 @@
-fastapi[all]
-sqlalchemy[asyncio]
-asyncpg
-alembic
-python-dotenv
-pydantic[email]
-pydantic-settings
-redis[hiredis]
-celery
-python-telegram-bot==20.7
-pillow
-httpx
+# Web Framework
+fastapi[all]==0.115.5
+uvicorn[standard]==0.34.0
+
+# Database
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Validation & Settings
+pydantic[email]==2.10.3
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
+
+# Cache & Queue
+redis[hiredis]==5.2.1
+celery==5.4.0
+
+# Telegram Bot
+python-telegram-bot==21.9
+pillow==11.0.0
+
+# HTTP Client
+httpx==0.28.1
+
+# Rate Limiting
+slowapi==0.1.9

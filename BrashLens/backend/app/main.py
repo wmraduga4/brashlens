@@ -1,103 +1,82 @@
-from datetime import datetime
-from fastapi import FastAPI, Depends, HTTPException
+"""FastAPI application main entry point."""
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text, select
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
-from app.core.database import get_db
-from app.models.test_model import TestConnection
+from app.core.config import settings
+from app.core.logging import setup_logging, get_logger
+from app.core.exceptions import global_exception_handler, validation_exception_handler
+from app.core.limiter import limiter
+from app.api.v1 import api_router
 
-app = FastAPI(title="BrashLens API")
+# Настройка логирования
+setup_logging()
+logger = get_logger(__name__)
 
-# CORS middleware - разрешаем все origins для разработки
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# Создание приложения
+app = FastAPI(
+    title="BrashLens API",
+    description="Telegram Mini App для управления фотобизнесом",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
+# Подключение rate limiter
+app.state.limiter = limiter
+if settings.RATE_LIMIT_ENABLED:
+    app.add_middleware(SlowAPIMiddleware)
+    # Обработчик превышения rate limit
+    app.add_exception_handler(
+        RateLimitExceeded,
+        lambda request, exc: JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "detail": f"Rate limit exceeded: {exc.detail}",
+            },
+            headers={"Retry-After": str(exc.retry_after)} if exc.retry_after else {},
+        ),
+    )
 
-@app.get("/")
+# CORS middleware с настройками из config
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=settings.ALLOWED_METHODS,
+    allow_headers=settings.ALLOWED_HEADERS,
+)
+
+# Глобальные обработчики исключений
+app.add_exception_handler(Exception, global_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+
+# Подключение роутеров API v1
+app.include_router(api_router, prefix="/api")
+
+
+@app.get("/", tags=["root"])
 async def root() -> dict[str, str]:
-    """Корневой эндпоинт API."""
-    return {"message": "BrashLens API v1.0"}
+    """
+    Корневой эндпоинт API.
+    
+    Returns:
+        dict: Информация о версии API
+    """
+    return {"message": "BrashLens API v1.0", "docs": "/docs"}
 
 
-@app.get("/health")
-async def health_check() -> dict[str, str]:
-    """Проверка здоровья приложения."""
-    return {
-        "status": "ok",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-    }
+@app.on_event("startup")
+async def startup_event() -> None:
+    """Событие запуска приложения."""
+    logger.info("BrashLens API starting up...")
+    logger.info(f"CORS allowed origins: {settings.ALLOWED_ORIGINS}")
 
 
-@app.get("/health/db")
-async def health_check_db(db: AsyncSession = Depends(get_db)) -> dict[str, str]:
-    """Временный endpoint для проверки подключения к БД."""
-    try:
-        result = await db.execute(text("SELECT version()"))
-        version = result.scalar()
-        return {
-            "status": "ok",
-            "database": "connected",
-            "version": str(version),
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "database": "disconnected",
-            "error": str(e),
-        }
-
-
-class TestConnectionRequest(BaseModel):
-    """Запрос для создания тестовой записи."""
-    message: str
-
-
-@app.post("/test-db")
-async def test_db(
-    request: TestConnectionRequest,
-    db: AsyncSession = Depends(get_db)
-) -> dict[str, str]:
-    """Тестовый endpoint для создания записи в test_connections."""
-    try:
-        test_record = TestConnection(message=request.message)
-        db.add(test_record)
-        await db.commit()
-        await db.refresh(test_record)
-        return {
-            "status": "ok",
-            "message": "Record created successfully",
-            "id": str(test_record.id),
-            "created_at": test_record.created_at.isoformat(),
-        }
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error creating record: {str(e)}")
-
-
-@app.get("/test-db")
-async def get_test_records(db: AsyncSession = Depends(get_db)) -> dict:
-    """Получить все тестовые записи."""
-    try:
-        result = await db.execute(select(TestConnection).order_by(TestConnection.created_at.desc()))
-        records = result.scalars().all()
-        return {
-            "status": "ok",
-            "count": len(records),
-            "records": [
-                {
-                    "id": str(record.id),
-                    "message": record.message,
-                    "created_at": record.created_at.isoformat(),
-                }
-                for record in records
-            ],
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching records: {str(e)}")
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    """Событие остановки приложения."""
+    logger.info("BrashLens API shutting down...")

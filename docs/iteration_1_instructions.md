@@ -261,7 +261,9 @@ git checkout dev
 ## 🔨 ЭТАП 2: FASTAPI БАЗОВОЕ ПРИЛОЖЕНИЕ
 
 ### Задача
-Создать минимальное FastAPI приложение с эндпоинтами `/health` и автогенерируемой документацией `/docs`.
+Создать минимальное FastAPI приложение с эндпоинтами `/api/v1/health` и автогенерируемой документацией `/docs`.
+
+**Важно:** API использует версионирование `/api/v1/` для всех endpoints. Структура роутеров организована в `app/api/v1/`.
 
 ### Промт для Cursor
 
@@ -270,9 +272,17 @@ git checkout dev
 
 1. backend/app/main.py:
    - FastAPI приложение с title="BrashLens API"
-   - Подключение CORS middleware (разрешить все origins для разработки)
-   - Роут GET /health -> {"status": "ok", "timestamp": "..."}
-   - Роут GET / -> {"message": "BrashLens API v1.0"}
+   - Подключение CORS middleware (настраивается через ALLOWED_ORIGINS в config)
+   - Подключение rate limiting (slowapi)
+   - Глобальные exception handlers
+   - Централизованное логирование
+   - Роут GET / -> {"message": "BrashLens API v1.0", "docs": "/docs"}
+   - Подключение роутеров из app/api/v1/
+
+2. backend/app/api/v1/health.py:
+   - Роутер для health check endpoints
+   - GET /api/v1/health -> {"status": "ok", "timestamp": "..."}
+   - GET /api/v1/health/db -> проверка подключения к БД
 
 2. backend/app/core/config.py:
    - Класс Settings на основе pydantic BaseSettings
@@ -283,13 +293,13 @@ git checkout dev
      * SECRET_KEY
    - Валидация обязательных полей
 
-3. backend/app/core/database.py:
+6. backend/app/core/database.py:
    - Async SQLAlchemy 2.0 engine
    - Async session factory
    - Dependency для получения session
    - Base для моделей
 
-4. backend/requirements.txt:
+7. backend/requirements.txt:
    - fastapi[all]
    - sqlalchemy[asyncio]
    - asyncpg
@@ -303,12 +313,12 @@ git checkout dev
    - pillow
    - httpx
 
-5. backend/Dockerfile:
+8. backend/Dockerfile:
    - Multi-stage build
    - Python 3.11-slim
    - Оптимизация для ARM64 (M1)
    - User non-root
-   - Health check на /health
+   - Health check на /api/v1/health (внутри контейнера)
 
 Следуй .cursorrules, используй async/await, type hints везде.
 ```
@@ -330,23 +340,23 @@ docker compose up -d backend
 #### ✅ Тест 1: Проверка работы FastAPI
 ```bash
 # Проверка health endpoint
-curl http://localhost:8000/health
+curl http://localhost:8001/api/v1/health
 
 # Ожидаемый результат: {"status":"ok","timestamp":"..."}
 
 # Проверка корневого endpoint
-curl http://localhost:8000/
+curl http://localhost:8001/
 
-# Ожидаемый результат: {"message":"BrashLens API v1.0"}
+# Ожидаемый результат: {"message":"BrashLens API v1.0","docs":"/docs"}
 ```
 
 #### ✅ Тест 2: Проверка документации
 ```bash
 # Открой в браузере
-open http://localhost:8000/docs
+open http://localhost:8001/docs
 
 # Ожидаемый результат: Swagger UI с документацией
-# Проверь, что есть эндпоинты: GET /, GET /health
+# Проверь, что есть эндпоинты: GET /, GET /api/v1/health
 ```
 
 #### ✅ Тест 3: Проверка подключения к БД
@@ -363,7 +373,7 @@ docker compose exec postgres psql -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB
 ```
 
 **Критерии прохождения:**
-- ✅ Эндпоинты /health и / отвечают корректно
+- ✅ Эндпоинты /api/v1/health и / отвечают корректно
 - ✅ Swagger UI доступен и отображает API
 - ✅ Backend успешно стартует без ошибок
 
@@ -495,11 +505,11 @@ docker compose exec postgres psql -U brashlens_user -d brashlens_db -c "\d test_
 
 #### ✅ Тест 3: Создание тестовой записи через API
 ```bash
-# Добавь временный endpoint в backend/app/main.py:
-# POST /test-db -> создаёт запись в test_connections
+# Endpoint уже создан в backend/app/api/v1/test.py:
+# POST /api/v1/test/db -> создаёт запись в test_connections
 
-# После добавления endpoint:
-curl -X POST http://localhost:8000/test-db \
+# Используй endpoint:
+curl -X POST http://localhost:8001/api/v1/test/db \
   -H "Content-Type: application/json" \
   -d '{"message":"Test connection works!"}'
 
@@ -562,17 +572,17 @@ git checkout dev
      * async delete(key: str)
      * async ping() -> bool
 
-3. Обнови backend/app/main.py:
-   - Добавь эндпоинт GET /test-redis
+3. Создай роутер backend/app/api/v1/cache.py:
+   - Эндпоинт GET /api/v1/cache/test
    - Использует CacheService.ping()
    - Возвращает {"redis": "ok"} или {"redis": "error"}
 
-4. Добавь эндпоинт POST /cache:
+4. Добавь эндпоинт POST /api/v1/cache:
    - Принимает {"key": "...", "value": "..."}
    - Сохраняет в Redis
    - Возвращает {"status": "saved"}
 
-5. Добавь эндпоинт GET /cache/{key}:
+5. Добавь эндпоинт GET /api/v1/cache/{key}:
    - Возвращает значение из Redis
    - Или 404 если ключ не найден
 
@@ -594,7 +604,7 @@ docker compose restart backend
 #### ✅ Тест 1: Проверка подключения к Redis
 ```bash
 # Тест ping
-curl http://localhost:8000/test-redis
+curl http://localhost:8001/api/v1/cache/test
 
 # Ожидаемый результат: {"redis":"ok"}
 ```
@@ -602,7 +612,7 @@ curl http://localhost:8000/test-redis
 #### ✅ Тест 2: Запись в Redis через API
 ```bash
 # Сохрани значение
-curl -X POST http://localhost:8000/cache \
+curl -X POST http://localhost:8001/api/v1/cache \
   -H "Content-Type: application/json" \
   -d '{"key":"test_key","value":"Hello Redis!"}'
 
@@ -618,12 +628,12 @@ docker compose exec redis redis-cli GET test_key
 #### ✅ Тест 3: Чтение из Redis через API
 ```bash
 # Получи значение
-curl http://localhost:8000/cache/test_key
+curl http://localhost:8001/api/v1/cache/test_key
 
 # Ожидаемый результат: {"key":"test_key","value":"Hello Redis!"}
 
 # Попробуй несуществующий ключ
-curl http://localhost:8000/cache/nonexistent
+curl http://localhost:8001/api/v1/cache/nonexistent
 
 # Ожидаемый результат: 404 Not Found
 ```
@@ -695,12 +705,13 @@ git checkout dev
 4. Обнови docker compose.yml:
    - Для celery_worker укажи command: celery -A app.core.celery_app worker --loglevel=info
 
-5. Добавь в backend/app/main.py эндпоинт POST /test-celery:
+5. Создай роутер backend/app/api/v1/tasks.py:
+   - Эндпоинт POST /api/v1/tasks/test
    - Принимает {"message": "..."}
    - Запускает test_task.delay(message)
    - Возвращает {"task_id": "..."}
 
-6. Добавь эндпоинт GET /task-status/{task_id}:
+6. Добавь эндпоинт GET /api/v1/tasks/status/{task_id}:
    - Проверяет статус задачи
    - Возвращает {"status": "...", "result": "..."}
 
@@ -742,7 +753,7 @@ docker compose ps celery-worker
 #### ✅ Тест 2: Запуск задачи через API
 ```bash
 # Запусти тестовую задачу
-curl -X POST http://localhost:8000/test-celery \
+curl -X POST http://localhost:8001/api/v1/tasks/test \
   -H "Content-Type: application/json" \
   -d '{"message":"Testing Celery!"}'
 
@@ -750,13 +761,13 @@ curl -X POST http://localhost:8000/test-celery \
 # Сохрани task_id
 
 # Сразу проверь статус
-curl http://localhost:8000/task-status/{task_id}
+curl http://localhost:8001/api/v1/tasks/status/{task_id}
 
 # Ожидаемый результат: {"status":"PENDING",...} или {"status":"STARTED",...}
 
 # Подожди 6 секунд и проверь снова
 sleep 6
-curl http://localhost:8000/task-status/{task_id}
+curl http://localhost:8001/api/v1/tasks/status/{task_id}
 
 # Ожидаемый результат: {"status":"SUCCESS","result":{...}}
 ```
@@ -1108,7 +1119,7 @@ docker compose -f docker-compose.prod.yml ps
 # Ожидаемый результат: все контейнеры Up и Healthy
 
 # Проверь доступность API
-curl https://brashlens.example.com/health
+curl https://brashlens.example.com/api/v1/health
 
 # Ожидаемый результат: {"status":"ok",...}
 ```
@@ -1243,7 +1254,7 @@ docker ps
 # Ожидаемый результат: все контейнеры Running
 
 # Проверь доступность API
-curl https://brashlens.example.com/health
+curl https://brashlens.example.com/api/v1/health
 ```
 
 #### ✅ Тест 3: Проверка логов автозапуска
@@ -1398,7 +1409,7 @@ cat README.md
 # Ожидаемый результат: последняя строка не должна быть видна
 
 # Проверь что приложение работает
-curl https://brashlens.example.com/health
+curl https://brashlens.example.com/api/v1/health
 ```
 
 **Критерии прохождения:**
@@ -1445,10 +1456,12 @@ git checkout dev
   - [ ] Celery beat запущен (если настроен)
 
 - [ ] **FastAPI:**
-  - [ ] Эндпоинты /health и / работают
+  - [ ] Эндпоинты /api/v1/health и / работают
   - [ ] Swagger UI доступен на /docs
   - [ ] Подключение к PostgreSQL успешно
   - [ ] Подключение к Redis успешно
+  - [ ] Rate limiting работает
+  - [ ] CORS настроен корректно
 
 - [ ] **База данных:**
   - [ ] Alembic настроен корректно
@@ -1482,7 +1495,7 @@ git checkout dev
 docker compose ps
 
 # 2. Проверь API
-curl https://brashlens.example.com/health
+curl https://brashlens.example.com/api/v1/health
 curl https://brashlens.example.com/docs
 
 # 3. Проверь БД
@@ -1493,7 +1506,7 @@ docker compose exec postgres psql -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB
 docker compose exec redis redis-cli PING
 
 # 5. Запусти тестовую Celery задачу
-curl -X POST https://brashlens.example.com/test-celery \
+curl -X POST https://brashlens.example.com/api/v1/tasks/test \
   -H "Content-Type: application/json" \
   -d '{"message":"Final test"}'
 

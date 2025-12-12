@@ -75,7 +75,7 @@ cd infrastructure && docker compose ps
 cd ../BrashLens && docker compose ps
 
 # Проверь API
-curl http://localhost:8001/health
+curl http://localhost:8001/api/v1/health
 ```
 
 ## Разработка

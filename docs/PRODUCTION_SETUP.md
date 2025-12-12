@@ -188,7 +188,7 @@ docker compose up -d
 
 4. **Проверь работоспособность:**
 ```bash
-curl http://localhost:8001/health
+curl http://localhost:8001/api/v1/health
 ```
 
 ## Чеклист безопасности

@@ -37,7 +37,7 @@ ENV PATH=/home/appuser/.local/bin:$PATH
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:8000/health', timeout=5)" || exit 1
+    CMD python -c "import httpx; httpx.get('http://localhost:8000/api/v1/health', timeout=5)" || exit 1
 
 # Порт приложения
 EXPOSE 8000
