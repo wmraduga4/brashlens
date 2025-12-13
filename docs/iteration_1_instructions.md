@@ -22,22 +22,26 @@ git init
 git checkout -b dev
 
 # Создаём структуру
-mkdir -p backend/app/{models,schemas,services,api,core,utils}
-mkdir -p backend/app/api/v1
-mkdir -p backend/alembic/versions
-mkdir -p frontend/src/{components,pages,hooks,services,utils,types}
+mkdir -p infrastructure
+mkdir -p BrashLens/backend/app/{models,schemas,services,api,core,utils}
+mkdir -p BrashLens/backend/app/api/v1
+mkdir -p BrashLens/backend/alembic/versions
+mkdir -p BrashLens/frontend/src/{components,pages,hooks,services,utils,types}
 mkdir -p docs
-mkdir -p nginx
 
 # Создаём базовые файлы
-touch backend/requirements.txt
-touch backend/.env.example
-touch backend/Dockerfile
-touch frontend/package.json
-touch docker-compose.yml
+touch infrastructure/docker-compose.yml
+touch infrastructure/.env.example
+touch BrashLens/backend/requirements.txt
+touch BrashLens/backend/.env.example
+touch BrashLens/backend/Dockerfile
+touch BrashLens/frontend/package.json
+touch BrashLens/docker-compose.yml
+touch BrashLens/.env.example
 touch .gitignore
 touch README.md
 touch .cursorrules
+touch .secret  # Справочник секретов (НЕ коммитится)
 
 # Открываем в Cursor
 cursor .
@@ -100,10 +104,13 @@ git checkout dev
 
 **КРИТИЧЕСКИ ВАЖНО:**
 - ✅ Файл `.env` должен быть в `.gitignore`
+- ✅ Файл `.secret` должен быть в `.gitignore` (справочник секретов)
 - ✅ Используй только `.env.example` для шаблона
+- ✅ Используй `.secret` как справочник для заполнения `.env` файлов
 - ✅ Никогда не коммитьте реальные токены, пароли, API ключи
 - ✅ Проверяй `git status` перед каждым коммитом
 - ✅ Используй переменные окружения для всех секретов
+- ✅ Для Telegram бота: используй разные токены для dev (локально) и prod (на сервере)
 
 ### Формат коммитов
 
@@ -163,8 +170,10 @@ git commit -m "docs: обновление инструкций деплоя"
      * Network: shared-network (external: true)
    
    - celery-beat: Celery beat scheduler
+     * Command: celery -A app.core.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
      * Environment из .env
      * Network: shared-network (external: true)
+     * Примечание: --schedule=/tmp/celerybeat-schedule нужен для работы на сервере (права доступа)
 
 Используй restart: unless-stopped для всех сервисов.
 Создай network shared-network в infrastructure, используй external в приложении.
@@ -268,9 +277,9 @@ git checkout dev
 ### Промт для Cursor
 
 ```
-@backend/app Создай структуру FastAPI приложения для BrashLens:
+@BrashLens/backend/app Создай структуру FastAPI приложения для BrashLens:
 
-1. backend/app/main.py:
+1. BrashLens/backend/app/main.py:
    - FastAPI приложение с title="BrashLens API"
    - Подключение CORS middleware (настраивается через ALLOWED_ORIGINS в config)
    - Подключение rate limiting (slowapi)
@@ -279,12 +288,12 @@ git checkout dev
    - Роут GET / -> {"message": "BrashLens API v1.0", "docs": "/docs"}
    - Подключение роутеров из app/api/v1/
 
-2. backend/app/api/v1/health.py:
+2. BrashLens/backend/app/api/v1/health.py:
    - Роутер для health check endpoints
    - GET /api/v1/health -> {"status": "ok", "timestamp": "..."}
    - GET /api/v1/health/db -> проверка подключения к БД
 
-2. backend/app/core/config.py:
+2. BrashLens/backend/app/core/config.py:
    - Класс Settings на основе pydantic BaseSettings
    - Загрузка переменных окружения:
      * DATABASE_URL
@@ -293,13 +302,13 @@ git checkout dev
      * SECRET_KEY
    - Валидация обязательных полей
 
-6. backend/app/core/database.py:
+6. BrashLens/backend/app/core/database.py:
    - Async SQLAlchemy 2.0 engine
    - Async session factory
    - Dependency для получения session
    - Base для моделей
 
-7. backend/requirements.txt:
+7. BrashLens/backend/requirements.txt:
    - fastapi[all]
    - sqlalchemy[asyncio]
    - asyncpg
@@ -313,7 +322,7 @@ git checkout dev
    - pillow
    - httpx
 
-8. backend/Dockerfile:
+8. BrashLens/backend/Dockerfile:
    - Multi-stage build
    - Python 3.11-slim
    - Оптимизация для ARM64 (M1)
@@ -424,27 +433,27 @@ docker compose exec -T postgres psql -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB
 ### Промт для Cursor
 
 ```
-@backend/app/models @backend/alembic Настрой Alembic и создай первую модель:
+@BrashLens/backend/app/models @BrashLens/backend/alembic Настрой Alembic и создай первую модель:
 
-1. backend/alembic.ini:
+1. BrashLens/backend/alembic.ini:
    - Инициализация Alembic
    - sqlalchemy.url берётся из env
 
-2. backend/alembic/env.py:
+2. BrashLens/backend/alembic/env.py:
    - Async конфигурация
    - Импорт Base из app.core.database
    - Импорт всех моделей
    - target_metadata = Base.metadata
 
-3. backend/app/models/__init__.py:
+3. BrashLens/backend/app/models/__init__.py:
    - Импорт всех моделей
 
-4. backend/app/models/test_model.py:
+4. BrashLens/backend/app/models/test_model.py:
    - Модель TestConnection(Base)
    - Поля: id (UUID, primary_key), message (String), created_at (DateTime)
    - __tablename__ = "test_connections"
 
-5. Скрипт backend/scripts/init_db.sh:
+5. Скрипт BrashLens/backend/scripts/init_db.sh:
    - alembic revision --autogenerate -m "Initial test table"
    - alembic upgrade head
 
@@ -480,12 +489,12 @@ docker compose exec backend alembic upgrade head
 #### ✅ Тест 1: Проверка создания миграции
 ```bash
 # Проверь что миграция создалась
-ls backend/alembic/versions/
+ls BrashLens/backend/alembic/versions/
 
 # Ожидаемый результат: файл миграции с timestamp
 
 # Проверь содержимое миграции
-cat backend/alembic/versions/*_initial_test_table.py
+cat BrashLens/backend/alembic/versions/*_initial_test_table.py
 
 # Ожидаемый результат: код создания таблицы test_connections
 ```
@@ -557,14 +566,14 @@ git checkout dev
 ### Промт для Cursor
 
 ```
-@backend/app/core Создай Redis сервис для BrashLens:
+@BrashLens/backend/app/core Создай Redis сервис для BrashLens:
 
-1. backend/app/core/redis.py:
+1. BrashLens/backend/app/core/redis.py:
    - Async Redis client
    - Функция get_redis_client() -> Redis
    - Dependency для FastAPI
 
-2. backend/app/services/cache_service.py:
+2. BrashLens/backend/app/services/cache_service.py:
    - Класс CacheService
    - Методы:
      * async set(key: str, value: str, expire: int = 3600)
@@ -572,7 +581,7 @@ git checkout dev
      * async delete(key: str)
      * async ping() -> bool
 
-3. Создай роутер backend/app/api/v1/cache.py:
+3. Создай роутер BrashLens/backend/app/api/v1/cache.py:
    - Эндпоинт GET /api/v1/cache/test
    - Использует CacheService.ping()
    - Возвращает {"redis": "ok"} или {"redis": "error"}
@@ -675,9 +684,9 @@ git checkout dev
 ### Промт для Cursor
 
 ```
-@backend/app/core @backend/app/services Настрой Celery для BrashLens:
+@BrashLens/backend/app/core @BrashLens/backend/app/services Настрой Celery для BrashLens:
 
-1. backend/app/core/celery_app.py:
+1. BrashLens/backend/app/core/celery_app.py:
    - Создание Celery app
    - Broker: Redis
    - Backend: Redis
@@ -689,7 +698,7 @@ git checkout dev
      * timezone = 'UTC'
      * enable_utc = True
 
-2. backend/app/services/tasks.py:
+2. BrashLens/backend/app/services/tasks.py:
    - Декоратор @celery_app.task
    - Задача test_task(message: str):
      * Логирует сообщение
@@ -698,14 +707,14 @@ git checkout dev
    - Задача add_numbers(a: int, b: int):
      * Возвращает сумму
 
-3. backend/app/celery_worker.py (точка входа):
+3. BrashLens/backend/app/celery_worker.py (точка входа):
    - Импорт celery_app
    - __name__ == "__main__" -> celery_app.start()
 
-4. Обнови docker compose.yml:
+4. Обнови BrashLens/docker-compose.yml:
    - Для celery_worker укажи command: celery -A app.core.celery_app worker --loglevel=info
 
-5. Создай роутер backend/app/api/v1/tasks.py:
+5. Создай роутер BrashLens/backend/app/api/v1/tasks.py:
    - Эндпоинт POST /api/v1/tasks/test
    - Принимает {"message": "..."}
    - Запускает test_task.delay(message)
@@ -827,51 +836,60 @@ git checkout dev
    - Укажи username: `brashlens_yourname_bot`
    - Скопируй токен: `1234567890:ABCdefGHIjklMNOpqrsTUVwxyz`
 
-2. **Добавь токен в .env:**
+2. **Добавь токены в .secret и .env:**
 ```bash
-# В BrashLens/backend/.env
-TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+# В корне проекта создай/обнови .secret (справочник секретов):
+TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz  # Production токен
+TELEGRAM_BOT_TOKEN_DEV=9876543210:XYZabcDEFghiJKLmnoPQRstu  # Dev токен (создай отдельного бота)
+
+# В BrashLens/backend/.env для локальной разработки:
+TELEGRAM_BOT_TOKEN=9876543210:XYZabcDEFghiJKLmnoPQRstu  # Используй DEV токен
+
+# На сервере в BrashLens/backend/.env:
+TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz  # Используй PRODUCTION токен
 WEBHOOK_URL=https://yourdomain.com/webhook  # Опционально для production
 ```
+
+**Важно:** Создай двух разных ботов через @BotFather - один для разработки, один для продакшена.
 
 ### Промт для Cursor
 
 ```
-@backend/app Создай Telegram бота для BrashLens как отдельный сервис:
+@BrashLens/backend/app Создай Telegram бота для BrashLens как отдельный сервис:
 
-1. backend/app/bot/__init__.py - пустой файл
+1. BrashLens/backend/app/bot/__init__.py - пустой файл
 
-2. backend/app/bot/handlers.py:
+2. BrashLens/backend/app/bot/handlers.py:
    - Обработчик команды /start:
      * Отправляет "👋 Привет! Я BrashLens бот."
      * Добавляет кнопки Inline:
        - "📸 Я фотограф"
        - "👤 Я клиент"
 
-3. backend/app/bot/bot.py:
+3. BrashLens/backend/app/bot/bot.py:
    - Инициализация бота (Application.builder())
    - Регистрация handlers
    - Функция setup_webhook(webhook_url: str)
    - Функция start_polling() для локальной разработки
    - Функция main() для запуска бота
 
-4. backend/app/bot/main.py:
+4. BrashLens/backend/app/bot/main.py:
    - Точка входа для запуска бота как отдельного процесса
    - Загружает конфигурацию
    - Запускает polling или webhook в зависимости от настроек
 
-5. backend/app/api/v1/webhook.py (для webhook режима):
+5. BrashLens/backend/app/api/v1/webhook.py (для webhook режима):
    - Router для webhook
    - POST /webhook:
      * Принимает Update от Telegram
      * Обрабатывает через бота
      * Возвращает 200 OK
 
-6. Обнови backend/app/core/config.py:
+6. Обнови BrashLens/backend/app/core/config.py:
    - Добавь TELEGRAM_BOT_TOKEN: str
    - Добавь WEBHOOK_URL: str | None = None
 
-7. Создай backend/Dockerfile.bot для чат-бота:
+7. Создай BrashLens/backend/Dockerfile.bot для чат-бота:
    - Базовый образ python:3.11-slim
    - Копирует код бота
    - CMD запускает bot/main.py
@@ -971,13 +989,14 @@ git checkout dev
 ## 🔨 ЭТАП 7: ДЕПЛОЙ НА VPS
 
 ### Задача
-Настроить VPS, задеплоить приложение, настроить Nginx, SSL, автозапуск.
+Настроить VPS, задеплоить приложение, настроить Nginx, SSL, автозапуск, автоматизацию деплоя через GitHub webhook.
 
 ### Предварительные требования
 
-- VPS с Ubuntu 22.04+
-- Доменное имя (brashlens.example.com)
+- VPS с Ubuntu 22.04+ (или Ubuntu 24.04+)
+- Доменное имя (brashlens.example.com) - опционально
 - SSH доступ
+- На сервере уже может быть запущена общая инфраструктура (shared_postgres, shared_redis)
 
 ### Промт для Cursor
 
@@ -994,7 +1013,7 @@ git checkout dev
    Секция "Application Deploy":
    - Клонирование репозитория
    - Копирование .env.production
-   - docker compose -f docker-compose.prod.yml up -d
+   - docker compose up -d
    
    Секция "Nginx Configuration":
    - Установка Nginx
@@ -1013,18 +1032,22 @@ git checkout dev
    
    Секция "CI/CD":
    - Базовый deploy.sh скрипт:
-     * git checkout main (на сервере работаем с main)
+     * git fetch origin
+     * git checkout main
      * git pull origin main
-     * docker compose build
-     * docker compose up -d
-     * docker compose exec backend alembic upgrade head
+     * docker compose down
+     * docker compose up -d --build
+     * docker compose exec backend alembic upgrade head (если есть миграции)
+     * docker compose ps
+   - GitHub webhook для автоматического деплоя при пуше в main
+   - Webhook сервер на порту 9000 (или через nginx)
 
-2. docker-compose.prod.yml:
-   - Отличия от dev версии:
-     * Без volume для hot reload
-     * Restart: always
-     * Healthchecks
-     * Логирование в файлы
+2. На сервере используется тот же docker-compose.yml:
+   - Для продакшна можно убрать volumes для hot reload (опционально)
+   - Restart: unless-stopped (или always)
+   - Healthchecks обязательны
+   - Имена контейнеров могут отличаться (shared_postgres вместо brashlens_postgres)
+   - Порт backend может быть другим (8044 вместо 8001)
 
 3. nginx/brashlens.conf:
    - Конфигурация Nginx
@@ -1039,34 +1062,75 @@ git checkout dev
 
 **Важно для MacBook M1:** Docker образы должны быть multi-platform или собраны для linux/amd64.
 
+**Работа на удаленном сервере:**
+- Следуй правилам из `.cursorrules` для работы на удаленном сервере
+- Один шаг = 1-3 команды для выполнения НА СЕРВЕРЕ
+- Не создавай файлы без явного разрешения
+- Команды выполняются на сервере, не локально
+
 1. **Генерируй документацию через Cursor**
 2. **Следуй инструкциям в docs/deployment.md**
 
 ### Пошаговый деплой
 
+**Важно:** На сервере может быть уже запущена общая инфраструктура с контейнерами `shared_postgres` и `shared_redis`. В этом случае:
+
+1. Клонируй только папку `BrashLens/` из репозитория
+2. Обнови `docker-compose.yml` для использования существующих контейнеров
+3. Создай отдельную БД и пользователя в существующем PostgreSQL
+
 ```bash
 # На VPS
-ssh deploy@brashlens.example.com
+ssh root@your-server-ip
 
-# Клонируй репозиторий
-git clone https://github.com/yourusername/brashlens.git
-cd brashlens
+# Создай директорию для проекта
+mkdir -p /root/wmraduga4
+cd /root/wmraduga4
 
-# Для разработки переключись на dev ветку
-git checkout dev
+# Клонируй только папку BrashLens из репозитория
+git clone --filter=blob:none --sparse git@github.com:yourusername/brashlens.git temp_repo
+cd temp_repo
+git sparse-checkout set --cone BrashLens
+mv BrashLens ../BrashLens
+cd ..
+rm -rf temp_repo
 
-# Настрой .env
+# Инициализируй git в папке проекта
+cd BrashLens
+git init
+git remote add origin git@github.com:yourusername/brashlens.git
+git fetch origin
+git checkout -b main origin/main
+
+# Обнови docker-compose.yml для использования существующих контейнеров
+# Замени brashlens_postgres -> shared_postgres
+# Замени brashlens_redis -> shared_redis
+# Измени порт backend на свободный (например, 8044:8000)
+
+# Создай БД и пользователя в существующем PostgreSQL
+docker exec -i shared_postgres psql -U existing_user -d existing_db << EOF
+CREATE USER govardvolov WITH PASSWORD 'password_from_secret';
+CREATE DATABASE brashlens_db OWNER govardvolov;
+GRANT ALL PRIVILEGES ON DATABASE brashlens_db TO govardvolov;
+EOF
+
+# Настрой .env файлы
+cp .env.example .env
+# Заполни значения из .secret (production токен бота!)
+nano .env
+
 cp backend/.env.example backend/.env
-nano backend/.env  # Заполни production значения
+# Заполни значения из .secret
+nano backend/.env
 
 # Запусти
-docker compose -f docker-compose.prod.yml up -d
+docker compose up -d --build
 
 # Проверь статус
-docker compose -f docker-compose.prod.yml ps
+docker compose ps
 
 # Проверь логи
-docker compose -f docker-compose.prod.yml logs
+docker compose logs
 ```
 
 ### Настройка Nginx
@@ -1102,11 +1166,37 @@ sudo certbot --nginx -d brashlens.example.com
 ### Настройка webhook для бота
 
 ```bash
-# Обнови .env на сервере
+# Обнови backend/.env на сервере
 WEBHOOK_URL=https://brashlens.example.com/webhook
 
-# Перезапусти backend
-docker compose -f docker-compose.prod.yml restart backend
+# Перезапусти chat-bot
+docker compose restart chat-bot
+```
+
+### Настройка автоматизации деплоя через GitHub webhook
+
+```bash
+# На сервере создай скрипт деплоя
+cd /root/wmraduga4/BrashLens
+cat > deploy.sh << 'EOF'
+#!/bin/bash
+cd /root/wmraduga4/BrashLens
+git fetch origin
+git checkout main
+git pull origin main
+docker compose down
+docker compose up -d --build
+docker compose ps
+EOF
+chmod +x deploy.sh
+
+# Создай простой webhook сервер (опционально)
+# Или используй готовый endpoint в backend/app/api/v1/webhook.py
+
+# На GitHub: Settings → Webhooks → Add webhook
+# Payload URL: http://your-server-ip:9000/webhook/deploy (или через nginx)
+# Content type: application/json
+# Events: Just the push event (только для ветки main)
 ```
 
 ### ТРОЙНОЕ ТЕСТИРОВАНИЕ #7
@@ -1114,14 +1204,17 @@ docker compose -f docker-compose.prod.yml restart backend
 #### ✅ Тест 1: Проверка доступности сервисов
 ```bash
 # На VPS проверь статус контейнеров
-docker compose -f docker-compose.prod.yml ps
+docker compose ps
 
 # Ожидаемый результат: все контейнеры Up и Healthy
 
-# Проверь доступность API
-curl https://brashlens.example.com/api/v1/health
+# Проверь доступность API (локально на сервере)
+curl http://localhost:8044/api/v1/health
 
 # Ожидаемый результат: {"status":"ok",...}
+
+# Если настроен nginx, проверь через домен
+curl https://brashlens.example.com/api/v1/health
 ```
 
 #### ✅ Тест 2: Проверка Nginx и SSL
@@ -1146,7 +1239,7 @@ open https://brashlens.example.com/docs
 # Ожидаемый результат: бот отвечает через webhook
 
 # Проверь логи webhook
-docker compose -f docker-compose.prod.yml logs backend | grep webhook
+docker compose logs backend | grep webhook
 
 # Ожидаемый результат: POST /webhook 200 OK
 
@@ -1211,8 +1304,8 @@ After=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/home/deploy/brashlens
-ExecStart=/usr/local/bin/docker compose -f docker-compose.prod.yml up -d
-ExecStop=/usr/local/bin/docker compose -f docker-compose.prod.yml down
+ExecStart=/usr/local/bin/docker compose up -d
+ExecStop=/usr/local/bin/docker compose down
 User=deploy
 Group=deploy
 
@@ -1297,10 +1390,10 @@ git checkout dev
 
 ---
 
-## 🔨 ЭТАП 9: CI/CD СКРИПТ ДЕПЛОЯ
+## 🔨 ЭТАП 9: CI/CD СКРИПТ ДЕПЛОЯ + АВТОМАТИЗАЦИЯ
 
 ### Задача
-Создать простой скрипт для обновления приложения на сервере.
+Создать простой скрипт для обновления приложения на сервере и настроить автоматический деплой через GitHub webhook.
 
 ### Промт для Cursor
 
@@ -1314,7 +1407,7 @@ git checkout dev
      * git pull origin main
      * Проверка изменений в requirements.txt
      * Если есть изменения -> docker compose build
-     * docker compose -f docker-compose.prod.yml up -d
+     * docker compose up -d
      * Применение миграций: docker compose exec backend alembic upgrade head
      * Restart сервисов
      * Healthcheck: curl /health
@@ -1322,39 +1415,60 @@ git checkout dev
    - Обработка ошибок на каждом шаге
    - Rollback если что-то пошло не так
 
-2. scripts/rollback.sh:
-   - git checkout HEAD~1
-   - docker compose down
-   - docker compose up -d
-   - Восстановление миграций БД
+2. Webhook для автоматического деплоя:
+   - GitHub webhook отправляет POST на сервер при пуше в main
+   - Webhook сервер (python или через nginx) запускает deploy.sh
+   - Настройка в GitHub: Settings → Webhooks → Add webhook
+   - Payload URL: http://your-server-ip:9000/webhook/deploy
+   - Events: Just the push event (только для ветки main)
 
-3. .github/workflows/deploy.yml (если используешь GitHub):
-   - Триггер: push в main
-   - Job: Deploy to VPS
-   - SSH в VPS
-   - Запуск deploy.sh
+3. Альтернатива: использовать готовый endpoint в backend/app/api/v1/webhook.py
+   - Настроить nginx для проксирования /webhook/deploy
+   - Endpoint проверяет секрет и запускает deploy.sh
 
 Скрипты для bash, безопасные, с логированием.
 ```
 
 ### Реализация
 
-1. **Генерируй скрипты через Cursor**
-2. **Сделай их исполняемыми:**
-
+1. **Создай deploy.sh на сервере:**
 ```bash
-chmod +x scripts/deploy.sh
-chmod +x scripts/rollback.sh
+# На сервере
+cd /root/wmraduga4/BrashLens
+cat > deploy.sh << 'EOF'
+#!/bin/bash
+cd /root/wmraduga4/BrashLens
+git fetch origin
+git checkout main
+git pull origin main
+docker compose down
+docker compose up -d --build
+docker compose ps
+EOF
+chmod +x deploy.sh
 ```
+
+2. **Настрой GitHub webhook:**
+   - GitHub → Settings → Webhooks → Add webhook
+   - Payload URL: `http://your-server-ip:9000/webhook/deploy`
+   - Content type: `application/json`
+   - Events: `Just the push event`
+   - Branch: `main`
 
 ### ТРОЙНОЕ ТЕСТИРОВАНИЕ #9
 
-#### ✅ Тест 1: Локальная проверка скрипта
+#### ✅ Тест 1: Проверка скрипта на сервере
 ```bash
-# Проверь синтаксис
-bash -n scripts/deploy.sh
+# На сервере проверь синтаксис
+cd /root/wmraduga4/BrashLens
+bash -n deploy.sh
 
 # Ожидаемый результат: нет ошибок синтаксиса
+
+# Проверь что скрипт исполняемый
+ls -la deploy.sh
+
+# Ожидаемый результат: -rwxr-xr-x
 ```
 
 #### ✅ Тест 2: Тестовый деплой на VPS
@@ -1374,8 +1488,9 @@ git merge dev
 git push origin main
 git checkout dev
 
-# Запусти deploy скрипт
-./scripts/deploy.sh
+# На сервере запусти deploy скрипт
+cd /root/wmraduga4/BrashLens
+./deploy.sh
 
 # Ожидаемый результат:
 # - Успешный git pull
@@ -1384,12 +1499,12 @@ git checkout dev
 # - Статус контейнеров: все Running
 ```
 
-#### ✅ Тест 3: Проверка rollback
+#### ✅ Тест 3: Проверка автоматического деплоя через webhook
 ```bash
-# Сделай ещё один коммит
+# На локальной машине сделай ещё один коммит
 echo "# Another change" >> README.md
 git add README.md
-git commit -m "Test rollback"
+git commit -m "Test webhook deploy"
 
 # Запушить dev, смержить в main, вернуться в dev
 git push origin dev
@@ -1398,24 +1513,27 @@ git merge dev
 git push origin main
 git checkout dev
 
-./scripts/deploy.sh
+# На сервере проверь логи webhook (если настроен)
+# Или проверь что deploy.sh выполнился автоматически
 
-# Откатись назад
-./scripts/rollback.sh
+# Проверь что изменения применились
+ssh root@your-server-ip
+cd /root/wmraduga4/BrashLens
+git log --oneline -3
 
-# Проверь что изменения отменены
-cat README.md
-
-# Ожидаемый результат: последняя строка не должна быть видна
+# Ожидаемый результат: последний коммит "Test webhook deploy"
 
 # Проверь что приложение работает
-curl https://brashlens.example.com/api/v1/health
+curl http://localhost:8044/api/v1/health
+docker compose ps
+
+# Ожидаемый результат: все контейнеры Running
 ```
 
 **Критерии прохождения:**
 - ✅ Скрипт deploy.sh успешно обновляет приложение
 - ✅ Все этапы деплоя выполняются без ошибок
-- ✅ Скрипт rollback.sh откатывает изменения
+- ✅ GitHub webhook автоматически запускает деплой при пуше в main (если настроен)
 
 **Если тесты не прошли:** добавь больше логирования, проверь пути и права.
 
@@ -1429,7 +1547,7 @@ git checkout dev
 git add .
 
 # Закоммить
-git commit -m "feat: этап 9 - CI/CD скрипты деплоя и rollback"
+git commit -m "feat: этап 9 - CI/CD скрипты деплоя и автоматизация через GitHub webhook"
 
 # Запушить dev, смержить в main, вернуться в dev
 git push origin dev
@@ -1662,6 +1780,12 @@ docker compose exec backend alembic history
 # Посмотреть активные задачи
 cd BrashLens
 docker compose exec celery-worker celery -A app.core.celery_app inspect active
+
+# Проверить статус celery-beat
+docker compose logs celery-beat
+
+# Если celery-beat падает с ошибкой прав доступа:
+# Убедись что в docker-compose.yml есть --schedule=/tmp/celerybeat-schedule
 
 # Очистить очередь
 cd ../infrastructure
