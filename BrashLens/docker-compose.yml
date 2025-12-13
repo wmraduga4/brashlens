@@ -35,6 +35,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile.bot
     container_name: brashlens_chat_bot
+    # Порт 8443 для webhook (доступен внутри Docker сети для nginx)
+    # На локальной машине порт не нужен (polling режим)
+    # На сервере nginx будет проксировать /webhook на chat-bot:8443
+    expose:
+      - "8443"
     volumes:
       - ./backend:/app
     environment:
@@ -45,8 +50,7 @@ services:
     networks:
       - shared-network
     restart: unless-stopped
-    depends_on:
-      - backend
+    # Бот - независимое приложение, не зависит от backend
 
   celery-worker:
     build:
@@ -74,7 +78,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: brashlens_celery_beat
-    command: celery -A app.core.celery_app beat --loglevel=info
+    command: celery -A app.core.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     volumes:
       - ./backend:/app
     environment:

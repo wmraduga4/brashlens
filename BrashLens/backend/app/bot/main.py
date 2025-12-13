@@ -16,8 +16,9 @@ async def main() -> None:
     logger.info("Starting BrashLens Telegram bot...")
     
     try:
-        if settings.WEBHOOK_URL:
-            logger.info(f"Setting up webhook: {settings.WEBHOOK_URL}")
+        # Проверяем что WEBHOOK_URL не пустой и не None
+        if settings.WEBHOOK_URL and settings.WEBHOOK_URL.strip():
+            logger.info(f"Starting bot in webhook mode: {settings.WEBHOOK_URL}")
             await setup_webhook(settings.WEBHOOK_URL)
         else:
             logger.info("Starting bot in polling mode...")

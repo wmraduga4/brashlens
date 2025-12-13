@@ -45,6 +45,12 @@ LOGGING_CONFIG: dict[str, Any] = {
             "handlers": ["default"],
             "propagate": False,
         },
+        # Логируем ошибки подключения к брокеру
+        "kombu": {
+            "level": "WARNING",  # WARNING и выше - видим ошибки подключения
+            "handlers": ["default"],
+            "propagate": False,
+        },
     },
     "root": {
         "level": "INFO",
