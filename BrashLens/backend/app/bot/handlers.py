@@ -1,4 +1,5 @@
 """Telegram bot handlers."""
+# Test auto-deploy
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import logging
