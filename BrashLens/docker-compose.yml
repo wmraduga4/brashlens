@@ -35,6 +35,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile.bot
     container_name: brashlens_chat_bot
+    # Порт 8443 нужен только для webhook режима (production)
+    # В polling режиме (разработка) порт не нужен
+    # ports:
+    #   - "8443:8443"
     volumes:
       - ./backend:/app
     environment:

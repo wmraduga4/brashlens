@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str
     TELEGRAM_BOT_TOKEN: str
     SECRET_KEY: str
-    WEBHOOK_URL: str | None = None
+    WEBHOOK_URL: str | None = Field(default=None, description="Webhook URL для Telegram бота (опционально, для production)")
     
     # CORS настройки
     ALLOWED_ORIGINS: list[str] = Field(

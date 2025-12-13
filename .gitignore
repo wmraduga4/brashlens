@@ -114,3 +114,7 @@ htmlcov/
 # Sensitive files
 .cursorrules
 .secret
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
