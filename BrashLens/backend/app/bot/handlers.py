@@ -17,7 +17,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        "👋 Привет! Я BrashLens бот.",
+        "👋 Привет! Я BrashLens бот. 🤝",
         reply_markup=reply_markup
     )
     logger.info(f"User {update.effective_user.id} sent /start command")
