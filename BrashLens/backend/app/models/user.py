@@ -36,7 +36,7 @@ class User(Base):
     first_name: Mapped[str] = mapped_column(String(255), nullable=False)
     last_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, name="user_role", create_constraint=True),
+        Enum(UserRole, name="user_role", create_constraint=True, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         index=True,
     )
