@@ -1,11 +1,14 @@
 """Сервис для работы с пользователями."""
 from typing import List, Optional
+import logging
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate, UserUpdate
+
+logger = logging.getLogger(__name__)
 
 
 class UserService:
@@ -107,3 +110,108 @@ class UserService:
 
         user = await self.create_user(user_data)
         return user, True
+
+    async def delete_user_by_telegram_id(self, telegram_id: int) -> bool:
+        """
+        Полное удаление пользователя и всех связанных данных.
+        
+        Best practices:
+        - Использует транзакцию для атомарности
+        - Явное удаление связанных данных (контроль)
+        - Логирование каждого шага
+        - Rollback при ошибке
+        
+        Args:
+            telegram_id: Telegram ID пользователя
+            
+        Returns:
+            bool: True если удаление успешно, False если пользователь не найден
+            
+        Raises:
+            Exception: При ошибке БД (транзакция откатывается)
+        """
+        try:
+            # Находим пользователя
+            user = await self.get_by_telegram_id(telegram_id)
+            if not user:
+                logger.warning(f"User with telegram_id {telegram_id} not found for deletion")
+                return False
+            
+            user_id = user.id
+            username = user.username or f"user_{user_id}"
+            
+            logger.info(
+                f"Starting deletion of user {user_id} "
+                f"(telegram_id: {telegram_id}, username: {username})"
+            )
+            
+            # Проверяем наличие Photographer (если модель существует)
+            # Используем try/except для безопасной проверки
+            photographer = None
+            photographer_settings = None
+            
+            try:
+                from app.models.photographer import Photographer, PhotographerSettings
+                
+                photographer_result = await self.db.execute(
+                    select(Photographer).where(Photographer.user_id == user_id)
+                )
+                photographer = photographer_result.scalar_one_or_none()
+                
+                if photographer:
+                    photographer_id = photographer.id
+                    logger.info(
+                        f"Found Photographer profile {photographer_id}, "
+                        f"deleting related data..."
+                    )
+                    
+                    # Удаляем PhotographerSettings
+                    await self.db.execute(
+                        delete(PhotographerSettings).where(
+                            PhotographerSettings.photographer_id == photographer_id
+                        )
+                    )
+                    logger.info(
+                        f"Deleted PhotographerSettings for photographer {photographer_id}"
+                    )
+                    
+                    # Удаляем Photographer
+                    await self.db.execute(
+                        delete(Photographer).where(Photographer.id == photographer_id)
+                    )
+                    logger.info(f"Deleted Photographer {photographer_id}")
+            except ImportError:
+                # Модель Photographer еще не создана - это нормально
+                logger.debug("Photographer model not found, skipping related data deletion")
+            except Exception as e:
+                logger.warning(f"Error checking/deleting Photographer: {e}")
+            
+            # Удаляем User
+            await self.db.execute(
+                delete(User).where(User.id == user_id)
+            )
+            logger.info(f"Deleted User {user_id}")
+            
+            # Commit всей транзакции
+            await self.db.commit()
+            
+            removed_items = "User"
+            if photographer:
+                removed_items += ", Photographer, PhotographerSettings"
+            
+            logger.info(
+                f"Successfully deleted user {user_id} "
+                f"(telegram_id: {telegram_id}, username: {username}). "
+                f"Removed: {removed_items}"
+            )
+            
+            return True
+            
+        except Exception as e:
+            # Rollback при любой ошибке
+            await self.db.rollback()
+            logger.error(
+                f"Error deleting user {telegram_id}: {e}",
+                exc_info=True
+            )
+            raise  # Пробрасываем дальше для обработки в handler
