@@ -1,11 +1,13 @@
 """Telegram bot setup and configuration."""
 import asyncio
 import logging
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from app.bot.handlers import (
     start_command,
     handle_callback,
     delete_me_command,
+    handle_sticker,
+    check_access_middleware,
 )
 from app.core.config import settings
 
@@ -20,9 +22,17 @@ def create_application() -> Application:
     application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
     
     # Регистрация handlers
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("delete_me", delete_me_command))
-    application.add_handler(CallbackQueryHandler(handle_callback))
+    # ВАЖНО: check_access_middleware должен быть ПЕРВЫМ (group=0) для проверки доступа
+    # перед обработкой любых сообщений, включая команды
+    application.add_handler(MessageHandler(filters.ALL, check_access_middleware), group=0)
+    application.add_handler(CallbackQueryHandler(check_access_middleware), group=0)
+    
+    # Команды и обработчики (group=1) - выполняются только если доступ разрешен
+    application.add_handler(CommandHandler("start", start_command), group=1)
+    application.add_handler(CommandHandler("delete_me", delete_me_command), group=1)
+    application.add_handler(CallbackQueryHandler(handle_callback), group=1)
+    # Обработчик стикеров (для получения file_id) - только для разрешенных пользователей
+    application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker), group=1)
     
     return application
 
