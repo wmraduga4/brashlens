@@ -45,6 +45,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@brashlens_postgres:5432/${POSTGRES_DB:-brashlens_db}
       - REDIS_URL=redis://brashlens_redis:6379/0
+      - CELERY_BROKER_URL=redis://brashlens_redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://brashlens_redis:6379/0
     env_file:
       - ./backend/.env
     networks:
