@@ -66,6 +66,9 @@ venv.bak/
 .env.local
 .env.*.local
 backend/.env
+# Разрешаем production примеры для автоматического деплоя
+!.env.production.example
+!**/.env.production.example
 
 # Node.js
 node_modules/
