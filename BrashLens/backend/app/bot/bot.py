@@ -2,7 +2,11 @@
 import asyncio
 import logging
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler
-from app.bot.handlers import start_command, handle_callback
+from app.bot.handlers import (
+    start_command,
+    handle_callback,
+    delete_me_command,
+)
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -17,6 +21,7 @@ def create_application() -> Application:
     
     # Регистрация handlers
     application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("delete_me", delete_me_command))
     application.add_handler(CallbackQueryHandler(handle_callback))
     
     return application
