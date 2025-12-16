@@ -11,6 +11,145 @@ from app.services.user_service import UserService
 logger = logging.getLogger(__name__)
 
 
+async def check_access_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Middleware для проверки доступа пользователя к тестовому боту.
+    
+    ВАЖНО: Проверка доступа выполняется ТОЛЬКО для тестового бота (IS_TEST_BOT=True).
+    Для продакшн бота (IS_TEST_BOT=False) проверка не выполняется, обработка продолжается.
+    
+    Проверяет доступ ПЕРЕД обработкой любого сообщения.
+    Если доступ запрещен - отправляет сообщение и останавливает обработку.
+    Если доступ разрешен - пропускает дальше (ничего не делает).
+    
+    Этот обработчик должен быть добавлен ПЕРВЫМ в цепочку обработчиков (group=0).
+    """
+    # КРИТИЧЕСКИ ВАЖНО: Проверка доступа ТОЛЬКО для тестового бота!
+    # Для продакшн бота - пропускаем без проверки
+    if not settings.IS_TEST_BOT:
+        # Продакшн бот - не проверяем доступ, пропускаем дальше
+        context.user_data.pop('_access_denied', None)
+        return
+    
+    user = update.effective_user
+    
+    if not user:
+        # Если нет пользователя - пропускаем (может быть системное сообщение)
+        return
+    
+    # Проверяем доступ (только для тестового бота)
+    if not check_user_access(user.id):
+        # Доступ запрещен - отправляем сообщение и останавливаем обработку
+        await send_unauthorized_access_message(update, context)
+        
+        # Определяем тип сообщения для логирования
+        message_type = "unknown"
+        if update.message:
+            if update.message.text:
+                message_type = f"text: {update.message.text[:50]}"
+            elif update.message.sticker:
+                message_type = "sticker"
+            elif update.message.photo:
+                message_type = "photo"
+            else:
+                message_type = update.message.content_type or "message"
+        elif update.callback_query:
+            message_type = f"callback: {update.callback_query.data}"
+        
+        logger.warning(
+            f"🚨 UNAUTHORIZED ACCESS ATTEMPT! User {user.id} tried to send {message_type} to test bot"
+        )
+        
+        # Устанавливаем флаг в контексте, чтобы другие обработчики могли проверить
+        context.user_data['_access_denied'] = True
+        return
+    
+    # Доступ разрешен - очищаем флаг и пропускаем дальше
+    # Обработка продолжается к следующим обработчикам для определения пользователя,
+    # его регистрации, роли и т.д.
+    context.user_data.pop('_access_denied', None)
+
+
+async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle sticker messages - log file_id for unauthorized access sticker."""
+    # Проверка доступа уже выполнена в check_access_middleware (group=0)
+    # Проверяем флаг доступа из контекста
+    if context.user_data.get('_access_denied'):
+        return
+    
+    user = update.effective_user
+    sticker = update.message.sticker
+    
+    if sticker:
+        logger.info(
+            f"Sticker received from user {user.id}: "
+            f"file_id={sticker.file_id}, "
+            f"file_unique_id={sticker.file_unique_id}, "
+            f"set_name={sticker.set_name}, "
+            f"emoji={sticker.emoji}"
+        )
+        # Отправляем обратно информацию о стикере
+        await update.message.reply_text(
+            f"✅ Стикер получен!\n\n"
+            f"**file_id:** `{sticker.file_id}`\n"
+            f"**file_unique_id:** `{sticker.file_unique_id}`\n"
+            f"**set_name:** `{sticker.set_name or 'N/A'}`\n"
+            f"**emoji:** {sticker.emoji or 'N/A'}\n\n"
+            f"Используйте этот file_id для отправки стикера в сообщении о несанкционированном доступе.",
+            parse_mode="Markdown"
+        )
+
+
+async def send_unauthorized_access_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Отправляет сообщение о несанкционированном доступе со стикером.
+    
+    Args:
+        update: Telegram Update объект
+        context: Context объект
+    """
+    unauthorized_text = (
+        "🚫 **СТОП! HALT! ALTO!**\n\n"
+        "Обнаружена попытка несанкционированного проникновения к тестовому боту. "
+        "Ты кто такой? Давай, до свидания! (шутка, дорогой, не обижайся)\n\n"
+        "🔐 Доступ разрешен только для авторизованных разработчиков. "
+        "Ты вроде не из наших... пока что.\n\n"
+        "📝 Кстати, мы всё записали: твой ID, время визита, что пытался сделать. "
+        "Не для доноса начальству, а так... чисто для логов. Так положено 🤟"
+    )
+    
+    try:
+        if update.message:
+            # Отправляем текстовое сообщение о несанкционированном доступе
+            # Стикер можно добавить позже, когда будет актуальный file_id
+            await update.message.reply_text(
+                unauthorized_text,
+                parse_mode="Markdown"
+            )
+            logger.info(f"Sent unauthorized access message to user {update.effective_user.id}")
+            
+        elif update.callback_query:
+            await update.callback_query.answer("🚨 НЕСАНКЦИОНИРОВАННЫЙ ДОСТУП!", show_alert=True)
+            await update.callback_query.edit_message_text(
+                unauthorized_text,
+                parse_mode="Markdown"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error sending unauthorized access message: {e}")
+        # Fallback - просто текст
+        if update.message:
+            await update.message.reply_text(
+                "🚫 СТОП! HALT! ALTO!\n\n"
+                "Обнаружена попытка несанкционированного проникновения к тестовому боту. "
+                "Ты кто такой? Давай, до свидания! (шутка, дорогой, не обижайся)\n\n"
+                "🔐 Доступ разрешен только для авторизованных разработчиков. "
+                "Ты вроде не из наших... пока что.\n\n"
+                "📝 Кстати, мы всё записали: твой ID, время визита, что пытался сделать. "
+                "Не для доноса начальству, а так... чисто для логов. Так положено 🤟"
+            )
+
+
 def check_user_access(telegram_id: int) -> bool:
     """
     Проверка доступа пользователя к боту.
@@ -52,16 +191,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Handle /start command."""
     user = update.effective_user
     
-    # Проверка доступа для тестового бота
-    if not check_user_access(user.id):
-        await update.message.reply_text(
-            "🚨 **АТУНГ! ПОПЫТКА НЕСАНКЦИОНИРОВАННОГО ВТОРЖЕНИЯ!!!** 🚨\n\n"
-            "⚠️ Обнаружена попытка несанкционированного доступа к тестовому боту.\n\n"
-            "🔒 Доступ разрешен только для авторизованных пользователей.\n\n"
-            "📋 Все попытки доступа логируются и отслеживаются.",
-            parse_mode="Markdown"
-        )
-        logger.warning(f"🚨 UNAUTHORIZED ACCESS ATTEMPT! User {user.id} tried to access test bot in /start command")
+    # Проверка доступа уже выполнена в check_access_middleware (group=0)
+    # Проверяем флаг доступа из контекста
+    if context.user_data.get('_access_denied'):
         return
     
     # Проверяем существование пользователя
@@ -121,17 +253,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     user = update.effective_user
     
-    # Проверка доступа для тестового бота
-    if not check_user_access(user.id):
-        await query.answer("🚨 НЕСАНКЦИОНИРОВАННЫЙ ДОСТУП!", show_alert=True)
-        await query.edit_message_text(
-            "🚨 **АТУНГ! ПОПЫТКА НЕСАНКЦИОНИРОВАННОГО ВТОРЖЕНИЯ!!!** 🚨\n\n"
-            "⚠️ Обнаружена попытка несанкционированного доступа к тестовому боту.\n\n"
-            "🔒 Доступ разрешен только для авторизованных пользователей.\n\n"
-            "📋 Все попытки доступа логируются и отслеживаются.",
-            parse_mode="Markdown"
-        )
-        logger.warning(f"🚨 UNAUTHORIZED ACCESS ATTEMPT! User {user.id} tried to access test bot in callback")
+    # Проверка доступа уже выполнена в check_access_middleware (group=0)
+    # Проверяем флаг доступа из контекста
+    if context.user_data.get('_access_denied'):
         return
     
     await query.answer()
@@ -164,16 +288,9 @@ async def delete_me_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     """
     user = update.effective_user
     
-    # Проверка доступа
-    if not check_user_access(user.id):
-        await update.message.reply_text(
-            "🚨 **АТУНГ! ПОПЫТКА НЕСАНКЦИОНИРОВАННОГО ВТОРЖЕНИЯ!!!** 🚨\n\n"
-            "⚠️ Обнаружена попытка несанкционированного доступа к тестовому боту.\n\n"
-            "🔒 Доступ разрешен только для авторизованных пользователей.\n\n"
-            "📋 Все попытки доступа логируются и отслеживаются.",
-            parse_mode="Markdown"
-        )
-        logger.warning(f"🚨 UNAUTHORIZED ACCESS ATTEMPT! User {user.id} tried to use /delete_me command")
+    # Проверка доступа уже выполнена в check_access_middleware (group=0)
+    # Проверяем флаг доступа из контекста
+    if context.user_data.get('_access_denied'):
         return
     
     # Проверяем что пользователь существует

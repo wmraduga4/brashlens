@@ -48,7 +48,7 @@ curl http://localhost:8044/api/v1/health
 ```bash
 # После завершения этапа
 git add .
-git commit -m "feat: описание изменений"
+git commit -m "feat: старт 2й итерации, новая документация для этапов 2, 3 и 4"
 git push origin dev
 git checkout main
 git merge dev
@@ -845,7 +845,7 @@ docker compose exec backend python test_user_role.py
 ```bash
 git checkout dev
 git add .
-git commit -m "feat: этап 3 итерации 2 - CRUD сервис для User"
+git commit -m "feat: этап 3 итерации 2 - CRUD сервис для User+ блокирую тестовый бот только разрешенные пользователи"
 git push origin dev
 git checkout main
 git merge dev
@@ -1561,19 +1561,24 @@ docker compose exec postgres psql -U govardvolov -d brashlens_db -c \
 ```bash
 git checkout dev
 git add .
-git commit -m "feat: iteration 2 complete - user registration system
+git commit -m "feat: Итерация 2 завершена - система регистрации юзеров
 
-- Created User model with all necessary fields
-- Setup Alembic migrations
-- Implemented Pydantic schemas for validation
-- Created UserService with CRUD operations
-- Added API endpoints for user management
-- Implemented Telegram bot registration flow
-- Added role selection (photographer/client)
-- Automatic language detection from Telegram
-- Prevent duplicate registrations
+- Накатили User модель со всеми нужными полями
+- Подняли Alembic миграции
+- Запилили Pydantic схемы для валидации
+- Сделали UserService с CRUD операциями
+- Добавили API эндпоинты для управления юзерами
+- Реализовали флоу регистрации через Telegram бота
+- Прикрутили выбор роли (фотограф/клиент)
+- Автоопределение языка из Telegram
+- Защита от дублей регистраций
 
-All features tested and working in production."
+
+Добавлено сверх ТЗ:
+Команда /delete_me — удаление аккаунта через бота
+блокировка обращений к тестовому боту от не опдтвержденных айди
+
+Всё протестил, накатил в прод."
 
 git push origin dev
 git checkout main
